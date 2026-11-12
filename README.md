@@ -2,9 +2,72 @@
 
 Convert AI agent skills between agent formats — and get an honest report of what changed.
 
-> **Status: Phase 0.5 complete.** Research and capability profiles for five agents are
-> finished and validated. There is no working converter yet; `packages/` is empty and the
-> package is not published. See [Roadmap](#roadmap).
+> **Status: Phase 1a complete.** The IR, the parsers for all five agents, `inspect` and
+> `agents` are working and tested on Linux, macOS and Windows. `convert` and `lint` are not
+> built yet, and the package is not published. See [Roadmap](#roadmap).
+
+## Commands
+
+```bash
+skillporter inspect <path> [--from <agent>] [--json]
+skillporter agents [--json]
+```
+
+`inspect` parses a skill and prints its intermediate representation plus every diagnostic.
+It reads; it never writes and never executes. Exit code is `0` when there are no errors and
+`1` when there are.
+
+```
+$ skillporter inspect fixtures/skills/report-builder --from claude-code
+report-builder  ·  fixtures/skills/report-builder
+
+  origin       Claude Code (claude-code, agent-skills, directory layout)
+  identity     report-builder  [from frontmatter]
+  body         1.1 KB  ·  sha256 ef70c8ccd3ef
+  frontmatter  4 field(s)
+
+  fields
+    name           string   honoured
+    allowed-tools  string   honoured
+    x-acme-owner   string   unknown (line 5)
+
+  shell syntax found: 2 occurrence(s), none executed
+    line 23  inline-bang  git rev-parse --short HEAD
+    line 27  fenced-bang  python scripts/build_report.py --input sample.csv
+
+  diagnostics  0 error(s), 3 warning(s), 0 info
+  warning UNKNOWN_CAPABILITY      SKILL.md:5      field "x-acme-owner" is not understood by claude-code; preserved verbatim
+  warning SHELL_INJECTION         SKILL.md:23     claude-code executes this placeholder before the body is loaded
+```
+
+### Why `--from` is sometimes required
+
+`.agents/skills` is read natively by Codex, DeepSeek Harness and Kimi Code, and as a
+compatibility source by OpenCode. Their rules differ, so `skillporter` refuses to pick one:
+
+```
+$ skillporter inspect fixtures/shared-root/.agents/skills/shared-helper
+error: cannot tell which agent this skill belongs to.
+
+  .agents/skills is read natively by codex-cli, deepseek-harness, kimi-code, so it has no single owning agent
+```
+
+A skill under `.claude/skills`, `.dsh/skills`, `.opencode/skills` or `.kimi-code/skills` is
+detected automatically, because one agent owns that directory.
+
+### Tool limits
+
+`inspect` refuses to read unbounded input. These are **skillporter's** limits, not any
+agent's, and every report says so:
+
+| Flag | Default | Meaning |
+| --- | --- | --- |
+| `--max-file-bytes` | 10 MiB | Largest single bundled file |
+| `--max-files` | 500 | Most bundled files to enumerate |
+| `--max-total-bytes` | 50 MiB | Total size of bundled files |
+| `--max-depth` | 8 | Deepest nesting below the skill root |
+
+Symlinks that resolve outside the skill root are skipped and reported, never followed.
 
 ## Why
 
@@ -107,7 +170,10 @@ silence is the enemy.
 | --- | --- | --- |
 | 0 | Research doc + capability profiles for Claude Code, `dsh`, Codex CLI | done |
 | 0.5 | Research + profiles for OpenCode and Kimi Code CLI | done |
-| 1 | IR, pipeline, report, CLI (`convert`, `inspect`, `lint`, `agents`), tests, CI | next |
+| 1a | IR, schema, parsers, `inspect`, `agents`, CI on 3 OSes | done |
+| 1b | `lint --for <agent>` with rule IDs, severities and source URLs | next |
+| 1c | `convert`, conversion report, install with backup | planned |
+| 1d | Fixtures with attribution, golden/round-trip/security tests, CONTRIBUTING | planned |
 | 2 | More Agent Skills agents via profiles (Cursor, Gemini CLI, Copilot, Zed, ZCode, Cline, Roo, Windsurf, Deep Agents) | planned |
 | 3 | Non-`SKILL.md` formats (`AGENTS.md`, Cursor rules, Gemini commands, legacy Claude commands) | planned |
 | 4 | Optional `--ai` adaptation, `doctor`, interop with `npx skills` | planned |
@@ -128,13 +194,16 @@ packages/          core, cli (Phase 1)
 
 ```bash
 npm install
-npm run validate:profiles   # schema + semantic checks over agents/*.yaml
-npm test
+npm run build              # tsc -b, project references
+npm run typecheck          # full rebuild with checking
+npm run validate:profiles  # schema + semantic checks over agents/*.yaml
+npm test                   # build, then the test suite
 ```
 
 Adding an agent: copy an existing profile in `agents/`, verify every field against that
 agent's official documentation, cite the URL and retrieval date, and run
 `npm run validate:profiles`. If a fact cannot be verified, set it to `unknown` with a note.
+No code is needed unless the agent does not read `SKILL.md` at all.
 
 ## License
 

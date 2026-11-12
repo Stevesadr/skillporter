@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: ${{ matrix.os }} / node ${{ matrix.node }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        node: ['22']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Validate capability profiles
+        run: npm run validate:profiles
+
+      - name: Build
+        run: npm run build
+
+      - name: Test
+        run: npm run test:only
+
+      - name: Smoke test the CLI
+        shell: bash
+        run: |
+          node packages/cli/dist/index.js agents
+          node packages/cli/dist/index.js inspect fixtures/skills/simple-prompt --from claude-code
+          node packages/cli/dist/index.js inspect fixtures/skills/report-builder --from claude-code --json > /dev/null
+
+      - name: Check that nothing executes skill content
+        shell: bash
+        run: |
+          # The security suite asserts this, but a direct check makes the guarantee
+          # visible in the job log and fails loudly if the fixture ever changes.
+          if [ -n "$(find . -name 'PWNED-BY-SKILLPORTER*' -not -path './node_modules/*' 2>/dev/null)" ]; then
+            echo "a marker file exists: skill content was executed" >&2
+            exit 1
+          fi
+          echo "no execution markers present"

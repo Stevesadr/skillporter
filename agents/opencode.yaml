@@ -18,18 +18,22 @@ paths:
       note: Searched from the current directory up to the project root, including matching directories at every level.
     - path: .claude/skills
       scope: project
+      role: compatibility
       note: Compatibility source. Global first, then from the farthest ancestor toward the current directory.
     - path: .agents/skills
       scope: project
+      role: compatibility
       note: Compatibility source, same ancestor ordering as .claude/skills.
   global:
     - path: ~/.config/opencode/skills
       scope: user
     - path: ~/.claude/skills
       scope: user
+      role: compatibility
       note: Compatibility source.
     - path: ~/.agents/skills
       scope: user
+      role: compatibility
       note: Compatibility source.
     - path: <skills[] config entries>
       scope: custom
@@ -56,7 +60,23 @@ discovery:
     named exactly SKILL.md may be nested in grouping directories such as
     skills/teams/release/SKILL.md. A directory containing SKILL.md is one skill
     and is not searched for more. Hidden files and directories and node_modules
-    are skipped. Search stops six directories below the source root.
+    are skipped.     Search stops six directories below the source root.
+
+identity:
+  source: path
+  requiredInDirectoryForm: false
+  requiredInFlatForm: false
+  displayNameFrom: name
+  note: >-
+    The skill ID is derived from the file path and is case-sensitive. Frontmatter
+    `name` is a display label only, so renaming the directory renames the skill.
+
+bodyExecution:
+  shellInjection:
+    executed: false
+    note: >-
+      No shell-execution syntax is documented for skill bodies. This records the
+      absence of documentation, not a documented denial.
 
 name:
   pattern: null
@@ -75,6 +95,8 @@ name:
 description:
   maxLength: null
   enforcement: none
+  requiredInDirectoryForm: false
+  requiredInFlatForm: false
   note: >-
     No maximum length is enforced. A skill without a description is simply not
     advertised to the model, so omitting it makes the skill invisible to

@@ -56,6 +56,22 @@ discovery:
     in a root is also accepted as a flat skill. A root that fails to scan
     contributes no candidates and logs a warning; the next lookup retries.
 
+identity:
+  source: frontmatter
+  requiredInDirectoryForm: true
+  requiredInFlatForm: true
+  displayNameFrom: name
+  note: >-
+    The frontmatter `name` is the identity; the directory name is not validated and
+    need not match. A missing or invalid name means the skill is ignored entirely.
+
+bodyExecution:
+  shellInjection:
+    executed: false
+    note: >-
+      No shell-execution syntax is documented for skill bodies. This records the
+      absence of documentation, not a documented denial.
+
 name:
   pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$'
   maxLength: null
@@ -71,6 +87,8 @@ name:
 description:
   maxLength: null
   enforcement: truncate
+  requiredInDirectoryForm: true
+  requiredInFlatForm: true
   truncation:
     at: 500
     unit: characters

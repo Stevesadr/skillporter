@@ -1,0 +1,16 @@
+{
+  "name": "skillporter",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Convert AI agent skills between agent formats with an explicit fidelity report.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "bin": {
+    "skillporter": "./dist/index.js"
+  },
+  "main": "./dist/index.js",
+  "dependencies": {
+    "@skillporter/core": "*",
+    "commander": "^12.1.0"
+  }
+}

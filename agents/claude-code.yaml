@@ -52,6 +52,28 @@ discovery:
     locations point at the same target. Changes in watched skill directories are
     picked up mid-session.
 
+identity:
+  source: frontmatter-or-directory
+  requiredInDirectoryForm: false
+  requiredInFlatForm: false
+  displayNameFrom: name
+  note: >-
+    `name` is optional and defaults to the directory name; the directory name also
+    stays a valid invocation, so the two can disagree without breaking anything.
+
+bodyExecution:
+  shellInjection:
+    executed: true
+    syntaxes:
+      - inline-bang
+      - fenced-bang
+    source: https://code.claude.com/docs/en/skills
+    note: >-
+      Commands run before the body is sent and their output replaces the
+      placeholder. A non-zero exit aborts the whole skill invocation. The converter
+      must never introduce this syntax into a Claude Code skill unless the source
+      already had it.
+
 name:
   pattern: null
   maxLength: null
@@ -67,6 +89,8 @@ name:
 description:
   maxLength: null
   enforcement: truncate
+  requiredInDirectoryForm: false
+  requiredInFlatForm: false
   truncation:
     at: 1536
     unit: characters

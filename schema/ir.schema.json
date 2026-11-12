@@ -1,0 +1,174 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://skillporter.dev/schema/ir.schema.json",
+  "title": "Skill intermediate representation",
+  "description": "The source-oriented IR every parser produces and every emitter consumes. Versioned; a breaking change bumps irVersion and this schema together.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "irVersion",
+    "identity",
+    "description",
+    "body",
+    "bodyHash",
+    "frontmatter",
+    "files",
+    "origin",
+    "text",
+    "shellInjection",
+    "diagnostics",
+    "limits"
+  ],
+  "properties": {
+    "irVersion": { "const": "1.0" },
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "displayName", "source"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "displayName": { "type": ["string", "null"] },
+        "source": {
+          "enum": ["frontmatter", "path", "frontmatter-or-directory", "frontmatter-or-filename", "directory", "filename"]
+        }
+      }
+    },
+    "description": { "type": "string" },
+    "body": {
+      "type": "string",
+      "description": "Byte-exact Markdown after the frontmatter. Line endings are never rewritten."
+    },
+    "bodyHash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "frontmatter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["present", "raw", "fields"],
+      "properties": {
+        "present": { "type": "boolean" },
+        "raw": { "type": "string" },
+        "fields": { "type": "array", "items": { "$ref": "#/$defs/field" } }
+      }
+    },
+    "files": { "type": "array", "items": { "$ref": "#/$defs/file" } },
+    "origin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["agent", "agentDisplayName", "profileVerification", "format", "layout", "root", "skillFile"],
+      "properties": {
+        "agent": { "type": "string", "minLength": 1 },
+        "agentDisplayName": { "type": "string" },
+        "profileVerification": { "type": "string" },
+        "format": { "type": "string" },
+        "layout": { "enum": ["directory", "flat"] },
+        "root": { "type": "string" },
+        "skillFile": { "type": "string" }
+      }
+    },
+    "text": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lineEnding", "hasBom"],
+      "properties": {
+        "lineEnding": { "enum": ["lf", "crlf", "mixed"] },
+        "hasBom": { "type": "boolean" }
+      }
+    },
+    "shellInjection": { "type": "array", "items": { "$ref": "#/$defs/injection" } },
+    "diagnostics": { "type": "array", "items": { "$ref": "#/$defs/diagnostic" } },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scope", "maxFileBytes", "maxFiles", "maxTotalBytes", "maxDepth"],
+      "properties": {
+        "scope": { "const": "tool" },
+        "maxFileBytes": { "type": "integer", "minimum": 1 },
+        "maxFiles": { "type": "integer", "minimum": 1 },
+        "maxTotalBytes": { "type": "integer", "minimum": 1 },
+        "maxDepth": { "type": "integer", "minimum": 1 }
+      }
+    }
+  },
+  "$defs": {
+    "field": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "value", "raw", "line", "column", "status", "effect"],
+      "properties": {
+        "key": { "type": "string", "minLength": 1 },
+        "value": {},
+        "raw": {
+          "type": "string",
+          "description": "Exact YAML source for this entry, preserved so an unknown field survives a round trip unchanged."
+        },
+        "line": { "type": "integer", "minimum": 1 },
+        "column": { "type": "integer", "minimum": 1 },
+        "status": { "enum": ["supported", "ignored", "emulated", "unsupported", "unknown"] },
+        "effect": { "enum": ["honoured", "ignored", "unknown"] },
+        "note": { "type": "string" }
+      }
+    },
+    "file": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "size", "mode", "sha256", "encoding", "lineEnding"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?!/)(?!.*(^|/)\\.\\.(/|$)).+$",
+          "description": "Posix path relative to the skill root. Absolute paths and .. segments are rejected before this point."
+        },
+        "size": { "type": "integer", "minimum": 0 },
+        "mode": { "type": "integer", "minimum": 0 },
+        "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "encoding": { "enum": ["utf8", "binary"] },
+        "lineEnding": { "enum": ["lf", "crlf", "mixed", null] }
+      }
+    },
+    "injection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "line", "column", "text", "command", "insideCodeFence"],
+      "properties": {
+        "kind": { "enum": ["inline-bang", "fenced-bang"] },
+        "line": { "type": "integer", "minimum": 1 },
+        "column": { "type": "integer", "minimum": 1 },
+        "text": { "type": "string" },
+        "command": { "type": "string" },
+        "insideCodeFence": { "type": "boolean" }
+      }
+    },
+    "diagnostic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "severity", "message"],
+      "properties": {
+        "code": {
+          "enum": [
+            "SHELL_INJECTION",
+            "UNKNOWN_CAPABILITY",
+            "SYMLINK_OUTSIDE_ROOT",
+            "SYMLINK_BROKEN",
+            "PATH_TRAVERSAL_REJECTED",
+            "ABSOLUTE_PATH_REJECTED",
+            "LIMIT_EXCEEDED",
+            "AMBIGUOUS_SOURCE",
+            "MISSING_REQUIRED_FIELD",
+            "FRONTMATTER_INVALID",
+            "FRONTMATTER_MISSING",
+            "FILE_SKIPPED",
+            "FLAT_LAYOUT",
+            "IDENTITY_DERIVED"
+          ]
+        },
+        "severity": { "enum": ["error", "warning", "info"] },
+        "message": { "type": "string", "minLength": 1 },
+        "file": { "type": "string" },
+        "line": { "type": "integer", "minimum": 1 },
+        "column": { "type": "integer", "minimum": 1 },
+        "hint": { "type": "string" },
+        "detail": { "type": "object" }
+      }
+    }
+  }
+}

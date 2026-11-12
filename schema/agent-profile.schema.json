@@ -12,8 +12,10 @@
     "verification",
     "paths",
     "discovery",
+    "identity",
     "name",
     "description",
+    "bodyExecution",
     "fields",
     "sources"
   ],
@@ -48,6 +50,8 @@
       }
     },
     "discovery": { "$ref": "#/$defs/discovery" },
+    "identity": { "$ref": "#/$defs/identity" },
+    "bodyExecution": { "$ref": "#/$defs/bodyExecution" },
     "name": { "$ref": "#/$defs/nameRules" },
     "description": { "$ref": "#/$defs/descriptionRules" },
     "limits": { "$ref": "#/$defs/limits" },
@@ -93,6 +97,11 @@
         },
         "scope": {
           "enum": ["project", "user", "admin", "system", "plugin", "custom"]
+        },
+        "role": {
+          "enum": ["native", "compatibility"],
+          "default": "native",
+          "description": "`compatibility` marks a directory the agent reads but does not own, such as OpenCode reading .claude/skills. Source detection only treats `native` roots as owners, so a compatibility source never makes a directory ambiguous."
         },
         "precedence": {
           "type": ["integer", "null"],
@@ -165,8 +174,66 @@
         "enforcement": {
           "enum": ["reject", "silent-skip", "truncate", "none", "unknown"]
         },
+        "requiredInDirectoryForm": {
+          "type": "boolean",
+          "description": "Whether a directory skill without a description is rejected or ignored."
+        },
+        "requiredInFlatForm": {
+          "type": "boolean",
+          "description": "Whether a flat .md skill without a description is rejected or ignored."
+        },
         "truncation": { "$ref": "#/$defs/truncation" },
         "note": { "type": "string" }
+      }
+    },
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source"],
+      "description": "Where the skill's addressable identity comes from. This decides which name the IR records and which directory name an emitter must use.",
+      "properties": {
+        "source": {
+          "enum": ["frontmatter", "path", "frontmatter-or-directory", "frontmatter-or-filename"],
+          "description": "`path` means the file path determines the identity and frontmatter name is decoration."
+        },
+        "requiredInDirectoryForm": {
+          "type": "boolean",
+          "description": "Whether a directory skill with no identity is rejected."
+        },
+        "requiredInFlatForm": {
+          "type": "boolean",
+          "description": "Whether a flat .md skill with no identity is rejected."
+        },
+        "displayNameFrom": {
+          "type": ["string", "null"],
+          "description": "Frontmatter field used as a human-facing label when the identity comes from the path."
+        },
+        "note": { "type": "string" }
+      }
+    },
+    "bodyExecution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["shellInjection"],
+      "description": "Whether the agent executes anything found in the skill body. The converter never executes; this only decides what must be reported and neutralised.",
+      "properties": {
+        "shellInjection": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["executed"],
+          "properties": {
+            "executed": {
+              "enum": [true, false, "unknown"],
+              "description": "`false` means no execution syntax is documented, not that a denial is documented."
+            },
+            "syntaxes": {
+              "type": "array",
+              "items": { "enum": ["inline-bang", "fenced-bang"] }
+            },
+            "source": { "type": "string" },
+            "note": { "type": "string" }
+          }
+        }
       }
     },
     "truncation": {

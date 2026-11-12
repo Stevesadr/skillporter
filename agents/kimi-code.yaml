@@ -12,6 +12,12 @@ notes: >-
   at the skills root (both optional, with fallbacks). Verified against the
   Chinese-language official documentation at kimi.com/code/docs; the CLI itself
   is TypeScript on Node 22.19+.
+  DOCUMENTATION CONFLICT: some Kimi help-centre guidance reportedly says name and
+  description are optional with a directory-name fallback, and that flow skills run
+  as /flow:<name>. The reference documentation says the opposite on both points, and
+  only the reference documentation is verified. See docs/research.md section 8.9.
+  The emitter must always write name and description for this target, and must never
+  generate a /flow: command.
 
 paths:
   project:
@@ -62,6 +68,23 @@ discovery:
     flat file is ignored. Only directories remembered into the workspace are
     merged; a directory added for one session only does not contribute skills.
 
+identity:
+  source: frontmatter-or-filename
+  requiredInDirectoryForm: true
+  requiredInFlatForm: false
+  displayNameFrom: name
+  note: >-
+    Directory form requires `name`; flat .md files fall back to the filename without
+    the extension. Names are case-insensitive.
+
+bodyExecution:
+  shellInjection:
+    executed: false
+    note: >-
+      No shell-execution syntax is documented for skill bodies. Plugin
+      `sessionStart.skill` is documented as injecting text only and executing
+      nothing, which is adjacent evidence but not a statement about skill bodies.
+
 name:
   pattern: null
   maxLength: null
@@ -78,6 +101,8 @@ name:
 description:
   maxLength: null
   enforcement: reject
+  requiredInDirectoryForm: true
+  requiredInFlatForm: false
   note: >-
     Mandatory in the directory form; omission fails to parse. In the flat form
     the description falls back to the first non-empty body line, truncated to 240

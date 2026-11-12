@@ -46,6 +46,23 @@ discovery:
     Skill changes are detected automatically; a restart is the fallback when an
     update does not appear.
 
+identity:
+  source: frontmatter
+  requiredInDirectoryForm: true
+  requiredInFlatForm: true
+  displayNameFrom: name
+  note: >-
+    SKILL.md must include `name` and `description`. Codex also has an optional
+    `agents/openai.yaml` with `interface.display_name` for presentation, which is
+    not the identity.
+
+bodyExecution:
+  shellInjection:
+    executed: false
+    note: >-
+      No shell-execution syntax is documented for skill bodies. This records the
+      absence of documentation, not a documented denial.
+
 name:
   pattern: null
   maxLength: null
@@ -60,6 +77,8 @@ name:
 description:
   maxLength: null
   enforcement: truncate
+  requiredInDirectoryForm: true
+  requiredInFlatForm: true
   truncation:
     at: 8000
     unit: characters
