@@ -81,8 +81,11 @@ async function main() {
       if (field.status === 'unknown' && !field.note) {
         problems.push(`${label}: fields.${name} is "unknown" but has no note explaining the gap`);
       }
-      if (field.mapsTo === profile.fields[name]?.mapsTo && field.status === 'supported' && field.mapsTo) {
-        problems.push(`${label}: fields.${name} is supported and mapsTo itself; drop mapsTo`);
+      if (field.mapsTo === name) {
+        problems.push(`${label}: fields.${name} mapsTo itself; drop mapsTo`);
+      }
+      if (field.mapsTo && !(field.mapsTo in profile.fields)) {
+        problems.push(`${label}: fields.${name} mapsTo "${field.mapsTo}", which is not in fields`);
       }
     }
 

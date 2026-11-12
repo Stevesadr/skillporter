@@ -1,0 +1,149 @@
+id: opencode
+displayName: OpenCode
+format: agent-skills
+verification: verified
+
+notes: >-
+  OpenCode has the most unusual model of the five surveyed agents: the skill
+  identifier comes from the file path, not from frontmatter, and frontmatter
+  `name` is only a display label. It is also the only agent here that reads
+  another agent's directory natively (.claude/skills) as a first-class
+  compatibility source. Discovery is deeper than the others (six levels) and it
+  silently accepts flat Markdown files at the source root.
+
+paths:
+  project:
+    - path: .opencode/skills
+      scope: project
+      note: Searched from the current directory up to the project root, including matching directories at every level.
+    - path: .claude/skills
+      scope: project
+      note: Compatibility source. Global first, then from the farthest ancestor toward the current directory.
+    - path: .agents/skills
+      scope: project
+      note: Compatibility source, same ancestor ordering as .claude/skills.
+  global:
+    - path: ~/.config/opencode/skills
+      scope: user
+    - path: ~/.claude/skills
+      scope: user
+      note: Compatibility source.
+    - path: ~/.agents/skills
+      scope: user
+      note: Compatibility source.
+    - path: <skills[] config entries>
+      scope: custom
+      note: >-
+        The `skills` array in opencode.json or opencode.jsonc. Relative paths
+        resolve from the active OpenCode working directory, not the config file;
+        ~/ resolves from home; absolute paths are used as written; http(s)
+        entries load an HTTP catalog. Arrays from every discovered config file
+        are combined rather than replaced.
+
+discovery:
+  skillDirDepth: 6
+  acceptsFlatMarkdown: true
+  followsSymlinks: null
+  upwardSearch: true
+  nestedLazyLoad: false
+  duplicateResolution: >-
+    Skills are selected by ID; if two sources define the same ID, the source
+    registered later supplies the skill. Registration order is built-in, then
+    .claude/skills, then .agents/skills, then ~/.config/opencode/skills, then
+    project .opencode/skills, then explicit skills entries.
+  note: >-
+    Markdown files must sit at the source root, e.g. skills/review.md. Files
+    named exactly SKILL.md may be nested in grouping directories such as
+    skills/teams/release/SKILL.md. A directory containing SKILL.md is one skill
+    and is not searched for more. Hidden files and directories and node_modules
+    are skipped. Search stops six directories below the source root.
+
+name:
+  pattern: null
+  maxLength: null
+  mustMatchDirectory: false
+  enforcement: none
+  note: >-
+    Frontmatter `name` is a display label only and defaults to the path-derived
+    ID. The ID is the file path: <source>/git-release/SKILL.md and
+    <source>/git-release.md both give `git-release`; <source>/teams/release/SKILL.md
+    gives `release`. IDs are exact and case-sensitive. The kebab-case pattern
+    ^[a-z0-9]+(-[a-z0-9]+)*$ and the 1-64 character bound are RECOMMENDED for
+    portable skills but V2 does not enforce them, nor does it enforce a match
+    between name and directory.
+
+description:
+  maxLength: null
+  enforcement: none
+  note: >-
+    No maximum length is enforced. A skill without a description is simply not
+    advertised to the model, so omitting it makes the skill invisible to
+    automatic selection but still loadable by ID.
+
+limits: {}
+
+fields:
+  name:
+    status: supported
+    note: Display label. Not the identifier; the path determines the ID.
+  description:
+    status: supported
+    note: Required in practice for model discovery; skills without one are not advertised.
+  disable-model-invocation:
+    status: supported
+    mapsTo: metadata.opencode/autoinvoke
+    note: >-
+      Setting true has the same effect as metadata.opencode/autoinvoke false.
+      When both are present, opencode/autoinvoke wins.
+  metadata.opencode/autoinvoke:
+    status: supported
+    note: >-
+      Set to false to omit the skill from the model's available list. The skill
+      stays registered and can still be loaded explicitly by ID.
+  license:
+    status: ignored
+    note: Accepted for portability by V2; not interpreted.
+  compatibility:
+    status: ignored
+    note: Accepted for portability by V2; not interpreted.
+  allowed-tools:
+    status: unknown
+    note: >-
+      Not documented. OpenCode uses a separate `permissions` mechanism with a
+      `skill` action, which is not a frontmatter field.
+
+extensions:
+  - id: id-from-path
+    description: >-
+      The skill ID is derived from the file path and is case-sensitive, so a
+      renamed directory renames the skill regardless of frontmatter `name`.
+    fidelityImpact: adapted
+  - id: http-skill-catalogs
+    description: >-
+      An http(s) entry in the skills array is loaded as a catalog: a base URL
+      with index.json listing entries, each downloading <base>/<entry>/<file>.
+      Paths must be safe, relative and same-origin.
+    fidelityImpact: dropped
+  - id: skill-permissions
+    description: >-
+      A `skill` permission action with allow, ask or deny effects, matched by ID
+      with the last matching rule winning; can be scoped per agent.
+    fidelityImpact: dropped
+  - id: explicit-load-by-id
+    description: >-
+      The model loads a skill by calling the skill tool with the exact ID, and a
+      user can mention @skill-id in a prompt. No slash-command namespace exists.
+    fidelityImpact: adapted
+  - id: supporting-file-sample
+    description: >-
+      On load, OpenCode supplies the skill's base directory and a sample of up to
+      ten supporting file paths; flat Markdown skills get no such list.
+    fidelityImpact: degraded
+
+sources:
+  - url: https://opencode.ai/docs/skills/
+    retrieved: 2026-11-12
+    note: Discovery locations, depth, IDs, frontmatter, precedence, permissions, catalogs.
+  - url: https://agentskills.io/specification
+    retrieved: 2026-11-12
+    note: Base format and field constraints.

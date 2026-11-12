@@ -54,14 +54,14 @@
     "fieldAliases": {
       "type": "object",
       "description": "Maps a foreign spelling of a field to the spelling this agent uses, so the pipeline can rename instead of dropping. Only needed where agents disagree on capitalisation or separators.",
-      "propertyNames": { "pattern": "^[A-Za-z0-9_.:-]+$" },
+      "propertyNames": { "pattern": "^[A-Za-z0-9_./:-]+$" },
       "additionalProperties": { "type": "string", "minLength": 1 }
     },
     "fields": {
       "type": "object",
       "description": "Per-frontmatter-field support. Keys are the field names as the target agent spells them. Any field absent from this map must be treated as `unknown` by the converter, which then warns instead of guessing.",
       "minProperties": 1,
-      "propertyNames": { "pattern": "^[A-Za-z0-9_.:-]+$" },
+      "propertyNames": { "pattern": "^[A-Za-z0-9_./:-]+$" },
       "additionalProperties": { "$ref": "#/$defs/field" }
     },
     "extensions": {
@@ -117,7 +117,10 @@
           "type": "boolean",
           "description": "Whether a bare `<name>.md` file is loaded as a skill, in addition to `<name>/SKILL.md`."
         },
-        "followsSymlinks": { "type": "boolean" },
+        "followsSymlinks": {
+          "type": ["boolean", "null"],
+          "description": "null when the agent does not document symlink handling. The converter must then warn rather than assume."
+        },
         "upwardSearch": {
           "type": "boolean",
           "description": "Whether roots are also scanned in ancestor directories up to the repository root."

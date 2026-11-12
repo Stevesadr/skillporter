@@ -1,0 +1,196 @@
+id: kimi-code
+displayName: Kimi Code CLI
+format: agent-skills
+verification: verified
+
+notes: >-
+  Kimi Code CLI (Moonshot AI, npm @moonshot-ai/kimi-code) reads an Agent
+  Skills-like format with its own frontmatter dialect: camelCase field names
+  that also accept kebab-case and snake_case aliases. It is the only surveyed
+  agent with a `type` field and a `flow` skill type. Two forms are accepted:
+  a directory with SKILL.md (name and description mandatory) and a flat .md file
+  at the skills root (both optional, with fallbacks). Verified against the
+  Chinese-language official documentation at kimi.com/code/docs; the CLI itself
+  is TypeScript on Node 22.19+.
+
+paths:
+  project:
+    - path: .kimi-code/skills
+      scope: project
+      note: Project root is the nearest ancestor containing .git.
+    - path: .agents/skills
+      scope: project
+      note: Shared root, also read by Codex CLI, dsh and OpenCode.
+  global:
+    - path: $KIMI_CODE_HOME/skills
+      scope: user
+      note: Default ~/.kimi-code/skills. Moves with KIMI_CODE_HOME, so isolating the data root also isolates Kimi-specific skills.
+    - path: ~/.agents/skills
+      scope: user
+      note: >-
+        Deliberately NOT moved by KIMI_CODE_HOME; it stays under the real OS
+        home so skills can be shared across tools.
+    - path: <extra_skill_dirs[]>
+      scope: custom
+      note: >-
+        Declared at the top level of config.toml, e.g.
+        extra_skill_dirs = ["~/team-skills", ".agents/team-skills"]. Adds to the
+        auto-discovered roots and persists across launches.
+    - path: <builtin>
+      scope: system
+      note: >-
+        Shipped with the CLI, lowest priority. Exposed as /<name> without the
+        skill: prefix. The product-explanation subset can be disabled with the
+        builtin_product_skills field.
+
+discovery:
+  skillDirDepth: 1
+  acceptsFlatMarkdown: true
+  followsSymlinks: null
+  upwardSearch: false
+  nestedLazyLoad: false
+  duplicateResolution: >-
+    Project > User > Extra > Built-in; a more specific scope wins. When a
+    workspace has several configured source directories, same-name skills are
+    all kept as variants, and invoking by bare name prefers the main directory
+    then the workspace directory order. The menu shows the last path segment of
+    each source so a variant can be picked.
+  note: >-
+    Only .md files directly at the top of a skills directory are recognised;
+    stray .md files in subdirectories are not skills. When both <name>/SKILL.md
+    and <name>.md exist in the same directory, the directory form wins and the
+    flat file is ignored. Only directories remembered into the workspace are
+    merged; a directory added for one session only does not contribute skills.
+
+name:
+  pattern: null
+  maxLength: null
+  mustMatchDirectory: false
+  enforcement: reject
+  note: >-
+    Names are case-insensitive and no character grammar is documented. The
+    reject behaviour refers to the directory form, where omitting `name` or
+    `description` causes a parse failure. The flat form may omit `name`, in which
+    case the filename without .md becomes the name; the on-disk file must still
+    end in .md or it is not scanned. Keeping the directory name equal to `name`
+    is a convention, not a rule.
+
+description:
+  maxLength: null
+  enforcement: reject
+  note: >-
+    Mandatory in the directory form; omission fails to parse. In the flat form
+    the description falls back to the first non-empty body line, truncated to 240
+    characters. No maximum length is documented for an explicit description.
+
+limits: {}
+
+fieldAliases:
+  when-to-use: whenToUse
+  when_to_use: whenToUse
+  disable-model-invocation: disableModelInvocation
+  disable_model_invocation: disableModelInvocation
+
+fields:
+  name:
+    status: supported
+    note: >-
+      Case-insensitive. Required for directory skills; optional for flat .md
+      files, where the filename is the fallback.
+  description:
+    status: supported
+    note: Required for directory skills. Drives automatic invocation together with whenToUse.
+  type:
+    status: supported
+    note: >-
+      prompt (default), inline (alias of prompt) or flow (manual invocation
+      only). Any other value causes the skill to be skipped.
+  whenToUse:
+    status: supported
+    note: Accepts when-to-use and when_to_use as aliases; the only surveyed agent accepting all three spellings.
+  disableModelInvocation:
+    status: supported
+    note: >-
+      true prevents automatic invocation. Accepts disable-model-invocation and
+      disable_model_invocation as aliases. Also implied by type flow.
+  arguments:
+    status: supported
+    note: >-
+      Named parameter list, either a string array or a whitespace-separated
+      string such as `arguments: target mode`. Declared names are readable in the
+      body as $<name>.
+  license:
+    status: unknown
+    note: Not documented in the skills reference.
+  compatibility:
+    status: unknown
+    note: Not documented in the skills reference.
+  metadata:
+    status: unknown
+    note: Not documented in the skills reference.
+  allowed-tools:
+    status: unknown
+    note: Not documented. Kimi Code exposes a separate permission-mode mechanism instead.
+
+extensions:
+  - id: flow-skill-type
+    description: >-
+      type flow marks a skill as manually invocable only. The official
+      documentation describes the type and its invocation behaviour but does not
+      document a required body format; a Mermaid or D2 flowchart in the body is
+      NOT documented and is treated as unverified. No other surveyed agent has a
+      skill type field.
+    fidelityImpact: degraded
+  - id: skill-namespace
+    description: >-
+      External skills are invoked as /skill:<name> with an optional /<name>
+      shorthand when the name is not taken by a system or plugin command.
+      Sub-skills appear as /<parent>.<sub>. Flow skills use the same /skill:<name>
+      form; there is no /flow: namespace.
+    fidelityImpact: dropped
+  - id: placeholder-substitution
+    description: >-
+      $ARGUMENTS, $ARGUMENTS[n], $n, $<name> from arguments, and
+      ${KIMI_SKILL_DIR}. Quoted positional arguments are supported. If the body
+      contains no placeholder, the invocation text is appended as
+      "ARGUMENTS: <text>".
+    fidelityImpact: dropped
+  - id: skills-dir-replacement
+    description: >-
+      The --skills-dir flag loads skills from the given directory and REPLACES
+      the auto-discovered user and project directories; it is repeatable. The
+      additive counterpart is extra_skill_dirs in config.toml.
+    fidelityImpact: dropped
+  - id: plugin-qualified-names
+    description: >-
+      Skills inside a plugin (kimi.plugin.json) are addressed by the fully
+      qualified name <plugin-id>:<skill-name>; sessionStart.skill can inject one
+      plugin skill at session start.
+    fidelityImpact: dropped
+  - id: nesting-limit
+    description: Skill invocation may nest at most three levels; deeper chains are terminated.
+    fidelityImpact: degraded
+  - id: variant-merging
+    description: >-
+      In a multi-directory workspace, same-name skills from different sources are
+      all retained as variants rather than resolved to one winner.
+    fidelityImpact: degraded
+
+sources:
+  - url: https://www.kimi.com/code/docs/kimi-code-cli/customization/skills.html
+    retrieved: 2026-11-12
+    note: Skill forms, name derivation, frontmatter table, placeholders, storage locations, precedence, invocation, nesting limit.
+  - url: https://www.kimi.com/code/docs/kimi-code-cli/reference/slash-commands.html
+    retrieved: 2026-11-12
+    note: >-
+      Verified that flow skills use /skill:<name> and that no /flow: namespace
+      exists.
+  - url: https://www.kimi.com/code/docs/kimi-code-cli/reference/kimi-command.html
+    retrieved: 2026-11-12
+    note: Verified that --skills-dir replaces auto-discovered directories and is repeatable.
+  - url: https://www.kimi.com/code/docs/kimi-code-cli/customization/plugins.html
+    retrieved: 2026-11-12
+    note: kimi.plugin.json, plugin-qualified skill names, sessionStart.skill.
+  - url: https://agentskills.io/specification
+    retrieved: 2026-11-12
+    note: Base format for comparison.

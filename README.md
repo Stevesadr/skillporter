@@ -2,7 +2,7 @@
 
 Convert AI agent skills between agent formats — and get an honest report of what changed.
 
-> **Status: Phase 0 complete.** Research and capability profiles for three agents are
+> **Status: Phase 0.5 complete.** Research and capability profiles for five agents are
 > finished and validated. There is no working converter yet; `packages/` is empty and the
 > package is not published. See [Roadmap](#roadmap).
 
@@ -33,17 +33,20 @@ what was preserved, adapted, degraded or dropped — and why. It never converts 
 
 ## Supported agents
 
-Phase 0/1 scope. `verified` means every fact in the profile traces to a primary source
+Phase 1 scope. `verified` means every fact in the profile traces to a primary source
 retrieved on the date shown.
 
-| Agent | Format | Project root | Global root | Name rule | Description | Status |
-| --- | --- | --- | --- | --- | --- | --- |
-| Claude Code | Agent Skills + extensions | `.claude/skills` | `~/.claude/skills` | none (character blocklist only) | truncates at 1,536 chars | verified |
-| DeepSeek Harness (`dsh`) | Agent Skills | `.dsh/skills`, `.agents/skills` | `~/.dsh/skills`, `~/.agents/skills` | `^[a-z0-9]+(?:-[a-z0-9]+)*$` | truncates at 500 chars | verified |
-| Codex CLI | Agent Skills + `agents/openai.yaml` | `.agents/skills` | `~/.agents/skills` | unknown | context budget, ~8,000 chars | verified |
+| Agent | Project root | Global root | Name / identity | Description | Status |
+| --- | --- | --- | --- | --- | --- |
+| Claude Code | `.claude/skills` | `~/.claude/skills` | none enforced (character blocklist) | truncates at 1,536 chars | verified |
+| DeepSeek Harness (`dsh`) | `.dsh/skills`, `.agents/skills` | `~/.dsh/skills`, `~/.agents/skills` | `^[a-z0-9]+(?:-[a-z0-9]+)*$` | truncates at 500 chars | verified |
+| Codex CLI | `.agents/skills` | `~/.agents/skills` | unknown | context budget, ~8,000 chars | verified |
+| OpenCode | `.opencode/skills`, `.claude/skills`, `.agents/skills` | `~/.config/opencode/skills` | derived from path, not frontmatter | none enforced | verified |
+| Kimi Code CLI | `.kimi-code/skills`, `.agents/skills` | `~/.kimi-code/skills`, `~/.agents/skills` | case-insensitive, no grammar | required (directory form) | verified |
 
-Full detail, including source URLs and retrieval dates, is in [`docs/research.md`](docs/research.md).
-The machine-readable form is in [`agents/`](agents/).
+Four of the five read `.agents/skills`; only Claude Code does not. Full detail, including
+source URLs and retrieval dates, is in [`docs/research.md`](docs/research.md). The
+machine-readable form is in [`agents/`](agents/).
 
 ## Fidelity reporting
 
@@ -73,12 +76,28 @@ silence is the enemy.
   away from Codex.
 - **`when_to_use` and `whenToUse` are different spellings of the same idea.** Converting
   between them is a rename, and the report says so.
+- **Kimi Code's `type: flow` has no equivalent elsewhere.** The type is documented as
+  "manual invocation only"; its body format is not documented at all, so a Mermaid or D2
+  requirement cannot be relied on. Converting away from Kimi keeps the body as plain text,
+  reports `type` as `degraded` with an explicit warning, and never invents a `flow` type on
+  the way in.
+- **Precedence differs per agent, so a shared directory is not a shared meaning.** In
+  `.agents/skills`, `dsh` ranks project over user, Codex merges duplicates rather than
+  resolving them, OpenCode lets the later source silently override, and Kimi Code keeps
+  same-name skills as variants. The report names the rule that decides a duplicate name for
+  each target.
 - **Body adaptation is rules-based only.** Known tool names and syntax are mapped from a
   data table. Anything not in the table is flagged, never guessed. An optional LLM-assisted
   mode is planned but will be off by default and require an explicit flag.
-- **Unverified behaviours.** Codex's name grammar, its handling of `license`,
-  `compatibility`, `metadata` and `allowed-tools`, and whether any agent enforces a maximum
-  skill size are all `unknown`. The converter warns rather than assumes.
+- **Shell-injection syntax is neutralised by default.** Claude Code's `` !`cmd` `` placeholders
+  and ` ```! ` blocks are executable. Converting *to* Claude Code from an agent that does not
+  execute them never produces executable content that was not executable in the source:
+  the syntax is escaped and a warning is emitted, unless `--shell-injection=keep` is passed.
+  Converting *away* from Claude Code preserves the text and reports `degraded`, listing each
+  occurrence.
+- **Unverified behaviours.** Codex's name grammar, OpenCode and Kimi Code symlink handling,
+  Kimi Code's `license`/`compatibility`/`metadata`/`allowed-tools` support, and the flow body
+  format are all `unknown`. The converter warns rather than assumes.
 - **`dsh` is in developer preview** and promises breaking changes. Its filesystem
   discovery is the most stable part; the profiles are pinned to a retrieval date.
 
@@ -87,8 +106,9 @@ silence is the enemy.
 | Phase | Scope | Status |
 | --- | --- | --- |
 | 0 | Research doc + capability profiles for Claude Code, `dsh`, Codex CLI | done |
+| 0.5 | Research + profiles for OpenCode and Kimi Code CLI | done |
 | 1 | IR, pipeline, report, CLI (`convert`, `inspect`, `lint`, `agents`), tests, CI | next |
-| 2 | More Agent Skills agents via profiles (Cursor, Gemini CLI, Copilot, Zed, ZCode, OpenCode, Cline, Roo, Windsurf, Deep Agents) | planned |
+| 2 | More Agent Skills agents via profiles (Cursor, Gemini CLI, Copilot, Zed, ZCode, Cline, Roo, Windsurf, Deep Agents) | planned |
 | 3 | Non-`SKILL.md` formats (`AGENTS.md`, Cursor rules, Gemini commands, legacy Claude commands) | planned |
 | 4 | Optional `--ai` adaptation, `doctor`, interop with `npx skills` | planned |
 

@@ -34,11 +34,32 @@ test('every profile validates against the schema', async () => {
   }
 });
 
-test('phase 0 agents are present and verified', async () => {
+test('every MVP agent has a profile', async () => {
   const profiles = await loadProfiles();
   const ids = profiles.map(({ profile }) => profile.id);
-  for (const required of ['claude-code', 'deepseek-harness', 'codex-cli']) {
-    assert.ok(ids.includes(required), `missing profile for ${required}`);
+  const required = ['claude-code', 'deepseek-harness', 'codex-cli', 'opencode', 'kimi-code'];
+  for (const id of required) {
+    assert.ok(ids.includes(id), `missing profile for ${id}`);
+  }
+  assert.equal(new Set(ids).size, ids.length, 'duplicate profile ids');
+});
+
+test('every fieldAlias resolves to a field that exists', async () => {
+  for (const { file, profile } of await loadProfiles()) {
+    for (const [alias, target] of Object.entries(profile.fieldAliases ?? {})) {
+      assert.ok(target in profile.fields, `${file}: alias ${alias} -> ${target} has no such field`);
+      assert.ok(!(alias in profile.fields), `${file}: alias ${alias} collides with a field of the same name`);
+    }
+  }
+});
+
+test('every unknown capability carries a note so the tool can explain itself', async () => {
+  for (const { file, profile } of await loadProfiles()) {
+    for (const [name, field] of Object.entries(profile.fields)) {
+      if (field.status === 'unknown') {
+        assert.ok(field.note && field.note.length > 10, `${file}: fields.${name} is unknown without a note`);
+      }
+    }
   }
 });
 

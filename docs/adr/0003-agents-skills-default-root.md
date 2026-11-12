@@ -48,3 +48,25 @@ the project's rule against inventing agent behaviour.
   agents the user does not have.
 - **Symlink everywhere.** Unverified for the shared root; would be exactly the kind of
   silent, undocumented assumption the report exists to prevent.
+
+---
+
+## Amendment, Phase 0.5
+
+Two more agents were added to the MVP: OpenCode and Kimi Code CLI. Both read
+`.agents/skills`, which makes it **four of five** agents rather than two of three. The
+decision stands and is strengthened.
+
+Two things the amendment adds:
+
+1. **Sharing a directory does not mean sharing a meaning.** Each agent resolves a duplicate
+   skill name differently: `dsh` by rank (project over user), Codex by keeping both rather
+   than resolving, OpenCode by letting the later-registered source silently override, Kimi
+   Code by keeping same-name skills as variants. So "write once" is only valid when the
+   emitted bytes are also unambiguous for every target, which is the rule the brief already
+   set: byte-identical outputs are written once, divergent outputs fall back to a
+   least-common-denominator file with the loss reported, and `--strict` fails.
+2. **OpenCode also reads `.claude/skills`.** That makes `.claude/skills` a legitimate
+   second shared root for the Claude Code + OpenCode pair, and it means a skill written only
+   for Claude Code is already visible to OpenCode. The converter should report that overlap
+   rather than writing a duplicate copy when those are the only two targets.
