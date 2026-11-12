@@ -4,6 +4,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Ajv2020 } from 'ajv/dist/2020.js';
 import { parse as parseYaml } from 'yaml';
+import type { RuleArea } from './rules.js';
 
 export type FieldStatus = 'supported' | 'ignored' | 'emulated' | 'unsupported' | 'unknown';
 export type Enforcement = 'reject' | 'silent-skip' | 'truncate' | 'none' | 'unknown';
@@ -22,6 +23,15 @@ export interface ProfileField {
   status: FieldStatus;
   mapsTo?: string | null;
   note?: string;
+  source?: string;
+}
+
+export interface ProfileExtension {
+  id: string;
+  description: string;
+  fidelityImpact: 'preserved' | 'adapted' | 'degraded' | 'dropped';
+  /** Declarative condition. When a skill matches, the rule engine reports the extension at risk. */
+  trigger?: { field: string; equals?: unknown };
   source?: string;
 }
 
@@ -80,8 +90,8 @@ export interface AgentProfile {
   limits?: Record<string, unknown>;
   fieldAliases?: Record<string, string>;
   fields: Record<string, ProfileField>;
-  extensions?: { id: string; description: string; fidelityImpact: string; source?: string }[];
-  sources: { url: string; retrieved: string; note?: string }[];
+  extensions?: ProfileExtension[];
+  sources: { url: string; retrieved: string; covers?: RuleArea[]; note?: string }[];
 }
 
 export class ProfileError extends Error {}

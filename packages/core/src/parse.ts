@@ -83,6 +83,52 @@ function mapFields(
   });
 }
 
+export interface IdentityInputs {
+  layout: 'directory' | 'flat';
+  /** The frontmatter `name`, when the file has one. */
+  frontmatterName?: string | undefined;
+  directoryName: string;
+  /** Filename without the .md extension. */
+  fileName: string;
+}
+
+export interface DerivedIdentity {
+  name: string;
+  displayName: string | null;
+  source: IRIdentity['source'];
+  /** From the profile, per layout. undefined means the profile does not say. */
+  required: boolean | undefined;
+}
+
+/**
+ * Work out the identity the agent would address this skill by.
+ *
+ * Pure: no diagnostics, no I/O. `lint` needs the same answer for a *target*
+ * profile as the parser needs for the *source* profile, so the derivation lives
+ * here rather than being written twice.
+ */
+export function deriveIdentity(profile: AgentProfile, inputs: IdentityInputs): DerivedIdentity {
+  const required =
+    inputs.layout === 'directory' ? profile.identity.requiredInDirectoryForm : profile.identity.requiredInFlatForm;
+  const fallback = profile.identity.source === 'frontmatter-or-directory' ? inputs.directoryName : inputs.fileName;
+
+  if (profile.identity.source === 'path') {
+    const name = inputs.layout === 'directory' ? inputs.directoryName : inputs.fileName;
+    return { name, displayName: inputs.frontmatterName ?? null, source: 'path', required };
+  }
+
+  if (inputs.frontmatterName !== undefined) {
+    return { name: inputs.frontmatterName, displayName: inputs.frontmatterName, source: 'frontmatter', required };
+  }
+
+  return {
+    name: fallback,
+    displayName: null,
+    source: inputs.layout === 'directory' ? 'directory' : 'filename',
+    required,
+  };
+}
+
 function resolveIdentity(
   profile: AgentProfile,
   layout: 'directory' | 'flat',
@@ -92,46 +138,37 @@ function resolveIdentity(
   diagnostics: Diagnostic[],
   file: string,
 ): IRIdentity {
-  const fromFrontmatter = stringField(fields, 'name');
-  const displayName = fromFrontmatter ?? null;
-  const directoryName = basename(root);
-  const fileName = basename(skillFile).replace(/\.md$/i, '');
-  const required = layout === 'directory' ? profile.identity.requiredInDirectoryForm : profile.identity.requiredInFlatForm;
+  const frontmatterName = stringField(fields, 'name');
+  const derived = deriveIdentity(profile, {
+    layout,
+    frontmatterName,
+    directoryName: basename(root),
+    fileName: basename(skillFile).replace(/\.md$/i, ''),
+  });
 
-  if (profile.identity.source === 'path') {
-    const name = layout === 'directory' ? directoryName : fileName;
-    return { name, displayName, source: 'path' };
+  // Nothing to report when the frontmatter supplied the identity, or when the
+  // profile takes the identity from the path and says so.
+  if (frontmatterName === undefined && profile.identity.source !== 'path') {
+    if (derived.required === true) {
+      diagnostics.push(
+        diagnostic('MISSING_REQUIRED_FIELD', 'error', `${profile.id} requires "name" in a ${layout} skill, and this one has none`, {
+          file,
+          hint: `As written, ${profile.id} would not load this skill. The identity shown below was derived from the path.`,
+          detail: { field: 'name', agent: profile.id, layout },
+        }),
+      );
+    } else {
+      diagnostics.push(
+        diagnostic('IDENTITY_DERIVED', 'info', `no "name" in frontmatter, so the identity comes from the ${layout === 'directory' ? 'directory name' : 'filename'}`, {
+          file,
+          hint: `${profile.id} documents this fallback, so nothing is lost.`,
+          detail: { derived: derived.name, agent: profile.id },
+        }),
+      );
+    }
   }
 
-  if (fromFrontmatter !== undefined) {
-    return { name: fromFrontmatter, displayName, source: 'frontmatter' };
-  }
-
-  const fallback = profile.identity.source === 'frontmatter-or-directory' ? directoryName : fileName;
-
-  if (required === true) {
-    diagnostics.push(
-      diagnostic('MISSING_REQUIRED_FIELD', 'error', `${profile.id} requires "name" in a ${layout} skill, and this one has none`, {
-        file,
-        hint: `As written, ${profile.id} would not load this skill. The identity shown below was derived from the path.`,
-        detail: { field: 'name', agent: profile.id, layout },
-      }),
-    );
-  } else {
-    diagnostics.push(
-      diagnostic('IDENTITY_DERIVED', 'info', `no "name" in frontmatter, so the identity comes from the ${layout === 'directory' ? 'directory name' : 'filename'}`, {
-        file,
-        hint: `${profile.id} documents this fallback, so nothing is lost.`,
-        detail: { derived: fallback, agent: profile.id },
-      }),
-    );
-  }
-
-  return {
-    name: fallback,
-    displayName: null,
-    source: layout === 'directory' ? 'directory' : 'filename',
-  };
+  return { name: derived.name, displayName: derived.displayName, source: derived.source };
 }
 
 /**

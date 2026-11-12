@@ -164,12 +164,24 @@ sources:
   - url: https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/subsystems/skills.md
     retrieved: 2026-11-12
     note: Discovery ranks, identity rules, catalog bound, invocation policy.
+    covers:
+      - paths
+      - discovery
+      - identity
+      - name
+      - description
+      - bodyExecution
   - url: https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/skill/skill-filesystem/src/index.ts
     retrieved: 2026-11-12
     note: Verified Config keys/defaults and the ignore-with-warning behaviour directly in source.
+    covers:
+      - description
+      - fields
   - url: https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/skill/skill/src/index.ts
     retrieved: 2026-11-12
     note: Verified SKILL_NAME regex and candidate/definition validation.
+    covers:
+      - name
   - url: https://github.com/pasqal-io/agent-marketplace/blob/main/docs/agents/deepseek-harness.md
     retrieved: 2026-11-12
     note: Third-party walkthrough; used as a cross-check, not as the primary source.

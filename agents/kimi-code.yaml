@@ -12,7 +12,8 @@ notes: >-
   at the skills root (both optional, with fallbacks). Verified against the
   Chinese-language official documentation at kimi.com/code/docs; the CLI itself
   is TypeScript on Node 22.19+.
-  DOCUMENTATION CONFLICT: some Kimi help-centre guidance reportedly says name and
+  DOCUMENTATION CONFLICT: the help-centre article
+  https://www.kimi.com/en/help/features/use-skills-in-code says name and
   description are optional with a directory-name fallback, and that flow skills run
   as /flow:<name>. The reference documentation says the opposite on both points, and
   only the reference documentation is verified. See docs/research.md section 8.9.
@@ -166,6 +167,10 @@ extensions:
       NOT documented and is treated as unverified. No other surveyed agent has a
       skill type field.
     fidelityImpact: degraded
+    trigger:
+      field: type
+      equals: flow
+    source: https://www.kimi.com/code/docs/kimi-code-cli/customization/skills.html
   - id: skill-namespace
     description: >-
       External skills are invoked as /skill:<name> with an optional /<name>
@@ -205,6 +210,14 @@ sources:
   - url: https://www.kimi.com/code/docs/kimi-code-cli/customization/skills.html
     retrieved: 2026-11-12
     note: Skill forms, name derivation, frontmatter table, placeholders, storage locations, precedence, invocation, nesting limit.
+    covers:
+      - format
+      - discovery
+      - identity
+      - name
+      - description
+      - fields
+      - bodyExecution
   - url: https://www.kimi.com/code/docs/kimi-code-cli/reference/slash-commands.html
     retrieved: 2026-11-12
     note: >-
@@ -213,9 +226,19 @@ sources:
   - url: https://www.kimi.com/code/docs/kimi-code-cli/reference/kimi-command.html
     retrieved: 2026-11-12
     note: Verified that --skills-dir replaces auto-discovered directories and is repeatable.
+    covers:
+      - paths
   - url: https://www.kimi.com/code/docs/kimi-code-cli/customization/plugins.html
     retrieved: 2026-11-12
     note: kimi.plugin.json, plugin-qualified skill names, sessionStart.skill.
+    covers:
+      - paths
+  - url: https://www.kimi.com/en/help/features/use-skills-in-code
+    retrieved: 2026-11-12
+    note: >-
+      Help-centre article that says name and description are optional with a
+      directory-name fallback. Contradicts the reference documentation; recorded
+      but not used as the basis for any rule. See docs/research.md section 8.9.
   - url: https://agentskills.io/specification
     retrieved: 2026-11-12
     note: Base format for comparison.

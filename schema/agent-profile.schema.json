@@ -295,6 +295,16 @@
           "enum": ["preserved", "adapted", "degraded", "dropped"],
           "description": "Best achievable outcome when this extension is present in the source and the target is another agent."
         },
+        "trigger": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["field"],
+          "description": "Optional machine-readable condition. When a skill's frontmatter matches, the rule engine can report the extension as at risk without any agent-specific code.",
+          "properties": {
+            "field": { "type": "string", "minLength": 1 },
+            "equals": { "description": "Value the field must hold. Omit to match on presence alone." }
+          }
+        },
         "source": { "type": "string" }
       }
     },
@@ -307,6 +317,13 @@
         "retrieved": {
           "type": "string",
           "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+        },
+        "covers": {
+          "type": "array",
+          "description": "Which parts of the profile this source substantiates. Lint cites the source that covers the rule's area.",
+          "items": {
+            "enum": ["format", "paths", "discovery", "identity", "name", "description", "fields", "bodyExecution"]
+          }
         },
         "note": { "type": "string" }
       }

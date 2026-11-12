@@ -674,17 +674,21 @@ Two sets of Kimi Code documentation disagree, and the disagreement is not cosmet
 | Claim | Source | Status |
 | --- | --- | --- |
 | `name` and `description` are mandatory for a directory skill; omitting either fails to parse | <https://www.kimi.com/code/docs/kimi-code-cli/customization/skills.html> | **verified** — stated in the frontmatter table and restated in the warning box below it |
-| `name` falls back to the directory name; both fields are optional | Kimi help-centre guidance, as reported to this project | **reported, not verified** — see note below |
-| Flow skills are invoked as `/flow:<name>` | Kimi help-centre guidance, as reported to this project | **contradicted** |
+| `name` falls back to the directory name; both fields are optional | <https://www.kimi.com/en/help/features/use-skills-in-code> | **located, still contradicted** — see note below |
+| Flow skills are invoked as `/flow:<name>` | Kimi help-centre guidance | **contradicted** by the slash-commands reference |
 | Flow skills are invoked as `/skill:<name>`; there is no `/flow:` namespace | <https://www.kimi.com/code/docs/kimi-code-cli/reference/slash-commands.html> | **verified** — stated explicitly in the Skill 动态命令 section |
 | `--skills-dir` **replaces** the auto-discovered roots | <https://www.kimi.com/code/docs/kimi-code-cli/reference/kimi-command.html> | **verified** |
 
-**Note on the unverified side.** The conflicting help-centre article could not be located at
-a stable public URL on 2026-11-12. The help centre at `kimi.com/zh-cn/help/` serves a
-JavaScript search shell that returns HTTP 200 for every path, including nonexistent ones, so
-a probe cannot confirm whether a given article exists. Rather than cite a URL that might not
-resolve, the claim is recorded here as **reported by the project owner** and left unverified.
-If someone locates the article, add the URL and re-check the table.
+**Note on the second source.** The help-centre article was supplied by the project owner on
+2026-11-12 as <https://www.kimi.com/en/help/features/use-skills-in-code>. Earlier attempts to
+locate it failed because the help centre at `kimi.com/zh-cn/help/` serves a JavaScript search
+shell that returns HTTP 200 for every path, including nonexistent ones, so a probe cannot
+distinguish a real article from a 404 page. The URL is recorded here as the source of the
+"optional with a directory-name fallback" reading.
+
+Having the URL does not resolve the conflict: the two pages are both first-party and they
+still disagree. The resolution below therefore does not depend on which one is right — it
+picks the behaviour that is correct under either reading.
 
 **How this is handled, given the conflict:**
 
@@ -825,7 +829,7 @@ agents share is the trigger text, and each spells it differently.
 | Kimi Code symlink handling | `followsSymlinks` is `null`; no doc statement found |
 | Kimi Code `license`, `compatibility`, `metadata`, `allowed-tools` | Not documented in the skills reference |
 | Kimi Code flow body format (Mermaid / D2) | The claim is absent from every official page checked; treated as `UNVERIFIED` |
-| Kimi Code: are `name` and `description` really mandatory? | Reference docs say yes, help-centre guidance reportedly says no. §8.9 records the conflict; the emitter writes both fields either way |
+| Kimi Code: are `name` and `description` really mandatory? | Reference docs say yes; the help-centre article at <https://www.kimi.com/en/help/features/use-skills-in-code> says no. §8.9 records the conflict; the profile keeps the reference reading and the emitter writes both fields either way |
 | Kimi Code: does a `/flow:` invocation exist? | Reference docs say no such namespace; the `/flow:` claim could not be traced. The tool never emits it |
 | Whether Kimi Code enforces a description length for an explicit description | Only the 240-char flat-form fallback is documented |
 
@@ -854,3 +858,4 @@ docs first.
 | 12 | <https://www.kimi.com/code/docs/kimi-code-cli/reference/slash-commands.html> | 2026-11-12 | Kimi invocation syntax; verified no `/flow:` namespace |
 | 13 | <https://www.kimi.com/code/docs/kimi-code-cli/reference/kimi-command.html> | 2026-11-12 | Verified `--skills-dir` replaces rather than adds |
 | 14 | <https://www.kimi.com/code/docs/kimi-code-cli/customization/plugins.html> | 2026-11-12 | `kimi.plugin.json`, qualified names, `sessionStart.skill` |
+| 15 | <https://www.kimi.com/en/help/features/use-skills-in-code> | 2026-11-12 | Help-centre article; source of the "`name`/`description` optional" reading, contradicted by #11 |

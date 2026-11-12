@@ -167,6 +167,16 @@ sources:
   - url: https://developers.openai.com/codex/skills
     retrieved: 2026-11-12
     note: Paths and scopes, context budget, agents/openai.yaml, [[skills.config]].
+    covers:
+      - paths
+      - discovery
+      - identity
+      - name
+      - description
+      - fields
+      - bodyExecution
   - url: https://agentskills.io/specification
     retrieved: 2026-11-12
     note: Base format and field constraints.
+    covers:
+      - format

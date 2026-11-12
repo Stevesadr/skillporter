@@ -12,6 +12,10 @@ export const DIAGNOSTIC_CODES = [
   'SYMLINK_OUTSIDE_ROOT',
   /** A symlink could not be resolved. */
   'SYMLINK_BROKEN',
+  /** The skill root itself is a symlink, and the target's symlink policy matters. */
+  'SYMLINK_ROOT',
+  /** Two skills in one discovery root resolve to the same name. */
+  'DUPLICATE_NAME',
   /** A path contained `..` and was refused. */
   'PATH_TRAVERSAL_REJECTED',
   /** A path was absolute where a relative one was required. */
@@ -22,12 +26,16 @@ export const DIAGNOSTIC_CODES = [
   'AMBIGUOUS_SOURCE',
   /** A field the agent requires is absent. */
   'MISSING_REQUIRED_FIELD',
+  /** A field is present but its value violates a constraint the agent documents. */
+  'FIELD_INVALID',
   /** Frontmatter exists but is not a valid YAML map. */
   'FRONTMATTER_INVALID',
   /** No frontmatter block at all. */
   'FRONTMATTER_MISSING',
   /** A file or directory was deliberately not included. */
   'FILE_SKIPPED',
+  /** Two or more bundled paths collide on a case-insensitive filesystem. */
+  'FILE_ANOMALY',
   /** The skill is a bare `.md` file rather than a directory. */
   'FLAT_LAYOUT',
   /** The identity was derived from the path because frontmatter did not supply it. */
@@ -42,14 +50,23 @@ export interface Diagnostic {
   code: DiagnosticCode;
   severity: Severity;
   message: string;
+  /**
+   * Stable lint rule identifier (SP001...). Absent on parse diagnostics that no
+   * rule owns, which is why `lint` copies those across under a wrapper rule.
+   */
+  ruleId?: string;
   /** Path relative to the skill root, posix separators. */
   file?: string;
   /** 1-based line in that file. */
   line?: number;
   /** 1-based column. */
   column?: number;
-  /** What the user can do about it. */
+  /** Why it matters. */
   hint?: string;
+  /** Suggested manual fix. Lint never applies it. */
+  fix?: string;
+  /** Capability-profile URL this finding is based on. */
+  source?: string;
   detail?: Record<string, unknown>;
 }
 

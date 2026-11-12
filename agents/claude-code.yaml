@@ -106,6 +106,10 @@ description:
 
 limits: {}
 
+fieldAliases:
+  whenToUse: when_to_use
+  when-to-use: when_to_use
+
 fields:
   name:
     status: supported
@@ -184,6 +188,10 @@ extensions:
       conversation history, in the background by default. No other surveyed
       agent has an equivalent.
     fidelityImpact: dropped
+    trigger:
+      field: context
+      equals: fork
+    source: https://code.claude.com/docs/en/skills
   - id: dynamic-shell-injection
     description: >-
       Inline !`command` placeholders and fenced ```! blocks are executed before
@@ -222,6 +230,16 @@ sources:
   - url: https://agentskills.io/specification
     retrieved: 2026-11-12
     note: Base format, field constraints, progressive disclosure.
+    covers:
+      - format
   - url: https://code.claude.com/docs/en/skills
     retrieved: 2026-11-12
     note: Scopes, precedence, full frontmatter reference, substitutions, extensions.
+    covers:
+      - paths
+      - discovery
+      - identity
+      - name
+      - description
+      - fields
+      - bodyExecution

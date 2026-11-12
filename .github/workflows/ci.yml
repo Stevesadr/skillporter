@@ -40,6 +40,9 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Check the lint rule catalogue is current
+        run: npm run rules:check
+
       - name: Test
         run: npm run test:only
 
@@ -49,6 +52,22 @@ jobs:
           node packages/cli/dist/index.js agents
           node packages/cli/dist/index.js inspect fixtures/skills/simple-prompt --from claude-code
           node packages/cli/dist/index.js inspect fixtures/skills/report-builder --from claude-code --json > /dev/null
+          node packages/cli/dist/index.js lint fixtures/skills/simple-prompt --for opencode
+          node packages/cli/dist/index.js lint fixtures/skills/report-builder --for claude-code --format json > /dev/null
+
+      - name: Check the documented exit codes
+        shell: bash
+        run: |
+          set +e
+          node packages/cli/dist/index.js lint fixtures/lint/.agents/skills/flat-skill.md --for deepseek-harness --from deepseek-harness > /dev/null
+          clean=$?
+          node packages/cli/dist/index.js lint fixtures/lint/.agents/skills/flat-skill.md --for codex-cli --from deepseek-harness > /dev/null
+          failed=$?
+          node packages/cli/dist/index.js lint fixtures/lint/.agents/skills/long-description --for deepseek-harness --from deepseek-harness > /dev/null
+          warned=$?
+          set -e
+          echo "clean=$clean error=$failed warnings=$warned"
+          [ "$clean" = "0" ] && [ "$failed" = "1" ] && [ "$warned" = "2" ]
 
       - name: Check that nothing executes skill content
         shell: bash

@@ -2,14 +2,15 @@
 
 Convert AI agent skills between agent formats — and get an honest report of what changed.
 
-> **Status: Phase 1a complete.** The IR, the parsers for all five agents, `inspect` and
-> `agents` are working and tested on Linux, macOS and Windows. `convert` and `lint` are not
-> built yet, and the package is not published. See [Roadmap](#roadmap).
+> **Status: Phase 1b complete.** The IR, the parsers for all five agents, `inspect`, `agents`
+> and `lint` are working and tested on Linux, macOS and Windows. `convert` is not built yet,
+> and the package is not published. See [Roadmap](#roadmap).
 
 ## Commands
 
 ```bash
 skillporter inspect <path> [--from <agent>] [--json]
+skillporter lint <path> --for <agent> [--from <agent>] [--format text|json] [--ignore-unknown]
 skillporter agents [--json]
 ```
 
@@ -55,10 +56,66 @@ error: cannot tell which agent this skill belongs to.
 A skill under `.claude/skills`, `.dsh/skills`, `.opencode/skills` or `.kimi-code/skills` is
 detected automatically, because one agent owns that directory.
 
+`lint` is the exception: it does not refuse. It assumes a source only to read the file, says
+so, and reports that the target rules are unaffected.
+
+## Linting
+
+`lint` answers one question: *will this skill work on that agent?* It reads, it never writes,
+it never fixes anything, and it never executes the skill.
+
+```
+$ skillporter lint fixtures/skills/report-builder --for deepseek-harness --from claude-code
+report-builder  ·  fixtures/skills/report-builder
+
+  target    DeepSeek Harness (dsh) (deepseek-harness) [verified]
+  source    claude-code  (given with --from)
+  identity  report-builder  [from frontmatter]
+  layout    directory
+
+  warning SP011  SKILL.md:4      DeepSeek Harness (dsh) accepts "allowed-tools" but does nothing with it
+          hint: Parsed into the metadata bag and otherwise ignored. dsh has no equivalent pre-approval.
+          fix:  Keep the field if the file must stay portable, and move the behaviour it expresses into the body or into the target configuration.
+          see:  https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/skill/skill-filesystem/src/index.ts
+  warning SP013  SKILL.md:5      "x-acme-owner" is not mentioned anywhere in the deepseek-harness capability profile
+          hint: skillporter has no verified answer for this field and will not guess. The field is preserved verbatim.
+          fix:  Check the target documentation, then record the answer in the capability profile rather than in this skill.
+          see:  https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/skill/skill-filesystem/src/index.ts
+  warning SP017  SKILL.md        DeepSeek Harness (dsh) does not execute shell syntax in the body; 2 occurrence(s) will appear as literal text
+          hint: These placeholders expanded in the source agent. Here they are text the model reads, which changes the prompt.
+          fix:  Replace the placeholder with the text it produced in the source agent, or keep it as documentation and say so.
+          see:  https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/subsystems/skills.md
+
+  result  warnings  ·  0 error(s), 3 warning(s), 0 info
+```
+
+Every finding carries a stable rule id, a severity, the file and line where it applies, the
+capability-profile URL it rests on, and a suggested fix you apply yourself. The full
+catalogue, with the diagnostic-code mapping, is in [`docs/lint-rules.md`](docs/lint-rules.md).
+
+Severity follows what the agent *does*, not how bad the news feels:
+
+| The agent… | Severity |
+| --- | --- |
+| refuses to load the skill (`reject`), or drops it silently (`silent-skip`) | `error` |
+| shortens a display string (`truncate`), or ignores the field | `warning` |
+| does not enforce anything (`none`) | `info` |
+| behaviour is undocumented (`unknown`, `null`) | `warning`, and `--ignore-unknown` suppresses it |
+
+Exit codes: `0` clean or informational only, `1` at least one error, `2` warnings only.
+
+### Why `lint` has no per-agent code
+
+Every rule reads the target capability profile. There is no `if (agent === 'codex-cli')`
+anywhere in the engine: adding an agent brings its rules with it. The test suite proves this
+by writing a synthetic profile to a temporary directory and asserting that a dozen rules fire
+for an agent the codebase has never heard of.
+
 ### Tool limits
 
-`inspect` refuses to read unbounded input. These are **skillporter's** limits, not any
-agent's, and every report says so:
+`inspect` and `lint` refuse to read unbounded input. These are **skillporter's** limits, not
+any agent's, and every report says so. A limit that is hit is reported under rule SP023,
+labelled as a tool limit, and never confused with an agent limit:
 
 | Flag | Default | Meaning |
 | --- | --- | --- |
@@ -171,8 +228,8 @@ silence is the enemy.
 | 0 | Research doc + capability profiles for Claude Code, `dsh`, Codex CLI | done |
 | 0.5 | Research + profiles for OpenCode and Kimi Code CLI | done |
 | 1a | IR, schema, parsers, `inspect`, `agents`, CI on 3 OSes | done |
-| 1b | `lint --for <agent>` with rule IDs, severities and source URLs | next |
-| 1c | `convert`, conversion report, install with backup | planned |
+| 1b | `lint --for <agent>` with rule IDs, severities and source URLs | done |
+| 1c | `convert`, conversion report, install with backup | next |
 | 1d | Fixtures with attribution, golden/round-trip/security tests, CONTRIBUTING | planned |
 | 2 | More Agent Skills agents via profiles (Cursor, Gemini CLI, Copilot, Zed, ZCode, Cline, Roo, Windsurf, Deep Agents) | planned |
 | 3 | Non-`SKILL.md` formats (`AGENTS.md`, Cursor rules, Gemini commands, legacy Claude commands) | planned |
@@ -182,9 +239,11 @@ silence is the enemy.
 
 ```
 agents/            capability profiles, one YAML per agent (data, not code)
-schema/            JSON Schema for capability profiles
+schema/            JSON Schema for capability profiles, the IR and the lint report
 docs/research.md   verified per-agent facts with source URLs and retrieval dates
+docs/lint-rules.md generated rule catalogue; edit the code, not the document
 docs/adr/          architecture decision records
+fixtures/lint/     skills that each exercise one lint rule
 scripts/           repository tooling
 tests/             test suite
 packages/          core, cli (Phase 1)
@@ -197,6 +256,8 @@ npm install
 npm run build              # tsc -b, project references
 npm run typecheck          # full rebuild with checking
 npm run validate:profiles  # schema + semantic checks over agents/*.yaml
+npm run rules              # regenerate docs/lint-rules.md from the rule catalogue
+npm run rules:check        # fail if docs/lint-rules.md has drifted
 npm test                   # build, then the test suite
 ```
 

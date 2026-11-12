@@ -1,0 +1,137 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://skillporter.dev/schema/lint-report.schema.json",
+  "title": "Lint report",
+  "description": "The JSON emitted by `skillporter lint --format json`. Stable surface: scripts may depend on it, so a breaking change bumps the major version. The same finding shape is reused by the conversion report in Phase 1c.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["skill", "target", "source", "findings", "summary"],
+  "properties": {
+    "skill": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "root", "layout", "identity", "identitySource"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "root": { "type": "string", "minLength": 1 },
+        "layout": { "enum": ["directory", "flat"] },
+        "identity": { "type": "string", "minLength": 1 },
+        "identitySource": {
+          "enum": ["frontmatter", "path", "frontmatter-or-directory", "frontmatter-or-filename", "directory", "filename"]
+        }
+      }
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "displayName", "verification"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "displayName": { "type": "string", "minLength": 1 },
+        "verification": { "enum": ["verified", "partial", "unverified"] }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["agent", "explicit", "assumed", "detection"],
+      "properties": {
+        "agent": { "type": "string", "minLength": 1 },
+        "explicit": {
+          "type": "boolean",
+          "description": "True when --from was given."
+        },
+        "assumed": {
+          "type": "boolean",
+          "description": "True when the location is shared and a source had to be assumed to read the file."
+        },
+        "detection": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["agent", "candidates", "alsoReadBy", "ambiguous", "reason", "matchedRoot"],
+          "properties": {
+            "agent": { "type": ["string", "null"] },
+            "candidates": { "type": "array", "items": { "type": "string" } },
+            "alsoReadBy": { "type": "array", "items": { "type": "string" } },
+            "ambiguous": { "type": "boolean" },
+            "reason": { "type": "string" },
+            "matchedRoot": { "type": ["string", "null"] }
+          }
+        }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "description": "One entry per problem. Every entry carries a rule id, a suggested fix and the profile URL it rests on.",
+      "items": { "$ref": "#/$defs/finding" }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["errors", "warnings", "info", "suppressed", "result"],
+      "properties": {
+        "errors": { "type": "integer", "minimum": 0 },
+        "warnings": { "type": "integer", "minimum": 0 },
+        "info": { "type": "integer", "minimum": 0 },
+        "suppressed": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Findings dropped by --ignore-unknown."
+        },
+        "result": { "enum": ["clean", "warning", "error"] }
+      }
+    }
+  },
+  "$defs": {
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ruleId", "code", "severity", "message", "fix", "source"],
+      "properties": {
+        "ruleId": { "type": "string", "pattern": "^SP[0-9]{3}$" },
+        "code": {
+          "enum": [
+            "SHELL_INJECTION",
+            "UNKNOWN_CAPABILITY",
+            "SYMLINK_OUTSIDE_ROOT",
+            "SYMLINK_BROKEN",
+            "SYMLINK_ROOT",
+            "DUPLICATE_NAME",
+            "PATH_TRAVERSAL_REJECTED",
+            "ABSOLUTE_PATH_REJECTED",
+            "LIMIT_EXCEEDED",
+            "AMBIGUOUS_SOURCE",
+            "MISSING_REQUIRED_FIELD",
+            "FIELD_INVALID",
+            "FRONTMATTER_INVALID",
+            "FRONTMATTER_MISSING",
+            "FILE_SKIPPED",
+            "FILE_ANOMALY",
+            "FLAT_LAYOUT",
+            "IDENTITY_DERIVED"
+          ]
+        },
+        "severity": { "enum": ["error", "warning", "info"] },
+        "message": { "type": "string", "minLength": 1 },
+        "fix": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Suggested manual fix. Lint never applies it."
+        },
+        "source": {
+          "type": "string",
+          "pattern": "^https?://",
+          "description": "Capability-profile URL this finding rests on."
+        },
+        "file": {
+          "type": "string",
+          "description": "Relative to the skill root. Absent when the finding is about the skill as a whole."
+        },
+        "line": { "type": "integer", "minimum": 1 },
+        "column": { "type": "integer", "minimum": 1 },
+        "hint": { "type": "string" },
+        "detail": { "type": "object" }
+      }
+    }
+  }
+}

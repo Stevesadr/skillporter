@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
-import { checkSafeRelativePath, parseSkill } from '../packages/core/dist/index.js';
+import { checkSafeRelativePath, lintSkill, parseSkill } from '../packages/core/dist/index.js';
 
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const FIXTURES = join(ROOT, 'fixtures');
@@ -64,6 +64,47 @@ test('no skill content is ever executed', async () => {
     for (const suffix of ['', '-fenced', '-codefence', '-script']) {
       const path = join(directory, `${marker}${suffix}`);
       assert.equal(await exists(path), false, `${path} must not exist: skill content was executed`);
+    }
+  }
+});
+
+test('lint never executes skill content either', async () => {
+  const parent = await mkdtemp(join(tmpdir(), 'skillporter-lint-exec-'));
+  const skill = join(parent, 'skill');
+  await mkdir(join(skill, 'scripts'), { recursive: true });
+
+  const marker = 'PWNED-BY-LINT';
+  await writeFile(
+    join(skill, 'SKILL.md'),
+    [
+      '---',
+      'name: lint-evil',
+      'description: Executable content that lint must read but never run.',
+      '---',
+      '',
+      `Inline: !\`touch ${marker}\``,
+      '',
+      '```!',
+      `touch ${marker}-fenced`,
+      '```',
+      '',
+    ].join('\n'),
+    'utf8',
+  );
+  await writeFile(join(skill, 'scripts', 'pwn.sh'), `#!/bin/sh\ntouch ${marker}-script\n`, 'utf8');
+
+  // Lint it for the one agent that would execute those placeholders.
+  const result = await lintSkill({ path: skill, for: 'claude-code', from: 'claude-code' });
+
+  assert.ok(
+    result.findings.some((item) => item.ruleId === 'SP016'),
+    'lint must report that the target would execute this',
+  );
+
+  for (const directory of [parent, skill, process.cwd(), tmpdir()]) {
+    for (const suffix of ['', '-fenced', '-script']) {
+      const path = join(directory, `${marker}${suffix}`);
+      assert.equal(await exists(path), false, `${path} must not exist: lint executed skill content`);
     }
   }
 });

@@ -149,24 +149,42 @@
             "UNKNOWN_CAPABILITY",
             "SYMLINK_OUTSIDE_ROOT",
             "SYMLINK_BROKEN",
+            "SYMLINK_ROOT",
+            "DUPLICATE_NAME",
             "PATH_TRAVERSAL_REJECTED",
             "ABSOLUTE_PATH_REJECTED",
             "LIMIT_EXCEEDED",
             "AMBIGUOUS_SOURCE",
             "MISSING_REQUIRED_FIELD",
+            "FIELD_INVALID",
             "FRONTMATTER_INVALID",
             "FRONTMATTER_MISSING",
             "FILE_SKIPPED",
+            "FILE_ANOMALY",
             "FLAT_LAYOUT",
             "IDENTITY_DERIVED"
           ]
         },
         "severity": { "enum": ["error", "warning", "info"] },
         "message": { "type": "string", "minLength": 1 },
+        "ruleId": {
+          "type": "string",
+          "pattern": "^SP[0-9]{3}$",
+          "description": "Stable lint rule identifier. Set by `lint`; absent on parser diagnostics that no rule owns."
+        },
         "file": { "type": "string" },
         "line": { "type": "integer", "minimum": 1 },
         "column": { "type": "integer", "minimum": 1 },
         "hint": { "type": "string" },
+        "fix": {
+          "type": "string",
+          "description": "Suggested manual fix. `lint` never applies it."
+        },
+        "source": {
+          "type": "string",
+          "pattern": "^https?://",
+          "description": "Capability-profile URL this finding rests on."
+        },
         "detail": { "type": "object" }
       }
     }

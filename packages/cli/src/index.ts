@@ -4,11 +4,13 @@ import {
   AmbiguousSourceError,
   ProfileError,
   SkillParseError,
+  exitCodeForSummary,
+  lintSkill,
   loadProfiles,
   parseSkill,
   type ToolLimits,
 } from '@skillporter/core';
-import { renderAgents, renderInspect } from './format.js';
+import { renderAgents, renderInspect, renderLint } from './format.js';
 
 const program = new Command();
 
@@ -62,6 +64,38 @@ limitOptions(
     }),
 );
 
+limitOptions(
+  program
+    .command('lint <path>')
+    .description('check whether a skill will work on a target agent. Read-only: nothing is executed and nothing is written')
+    .requiredOption('--for <agent>', 'target agent to check against')
+    .option('--from <agent>', 'source agent; inferred from the path when omitted')
+    .addOption(new Option('--format <format>', 'output format').choices(['text', 'json']).default('text'))
+    .option('--json', 'alias for --format json')
+    .option('--ignore-unknown', 'suppress UNKNOWN_CAPABILITY findings')
+    .action(async (target: string, options: Record<string, unknown>) => {
+      try {
+        const result = await lintSkill({
+          path: target,
+          for: String(options.for),
+          ...(typeof options.from === 'string' ? { from: options.from } : {}),
+          ...(options.ignoreUnknown === true ? { ignoreUnknown: true } : {}),
+          limits: limitsFrom(options),
+        });
+
+        if (options.format === 'json' || options.json === true) {
+          process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+        } else {
+          process.stdout.write(`${renderLint(result, target)}\n`);
+        }
+
+        process.exitCode = exitCodeForSummary(result.summary);
+      } catch (error) {
+        reportError(error, 'lint');
+      }
+    }),
+);
+
 program
   .command('agents')
   .description('list supported agents and their capability summary')
@@ -79,7 +113,7 @@ program
     }
   });
 
-function reportError(error: unknown): void {
+function reportError(error: unknown, command = 'inspect'): void {
   if (error instanceof AmbiguousSourceError) {
     const { detection } = error;
     process.stderr.write(`error: cannot tell which agent this skill belongs to.\n\n`);
@@ -91,7 +125,7 @@ function reportError(error: unknown): void {
       }
       process.stderr.write(`  Their rules differ, so skillporter will not pick one for you.\n\n`);
       process.stderr.write(`  Re-run with --from <agent>, for example:\n`);
-      process.stderr.write(`    skillporter inspect <path> --from ${detection.candidates[0]}\n`);
+      process.stderr.write(`    skillporter ${command} <path> --from ${detection.candidates[0]}\n`);
     } else {
       process.stderr.write(`  Re-run with --from <agent>. Run \`skillporter agents\` to list them.\n`);
     }

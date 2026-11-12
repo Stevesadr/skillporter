@@ -32,6 +32,7 @@ export type {
   IdentitySource,
   PathEntry,
   PathRole,
+  ProfileExtension,
   ProfileField,
 } from './profile.js';
 
@@ -41,8 +42,21 @@ export type { FrontmatterSplit, ParsedFrontmatter, RawField } from './frontmatte
 export { detectSource } from './detect.js';
 export type { Detection } from './detect.js';
 
-export { AmbiguousSourceError, parseSkill, SkillParseError } from './parse.js';
-export type { ParseOptions, ParseResult } from './parse.js';
+export { AmbiguousSourceError, deriveIdentity, parseSkill, SkillParseError } from './parse.js';
+export type { DerivedIdentity, IdentityInputs, ParseOptions, ParseResult } from './parse.js';
 
 export { IR_VERSION } from './ir.js';
 export type { FieldEffect, IRFrontmatterField, IRIdentity, IROrigin, SkillIR } from './ir.js';
+
+export {
+  enforcementConsequence,
+  LINT_RULES,
+  ruleById,
+  rulesByDiagnosticCode,
+  rulesForArea,
+  severityForEnforcement,
+} from './rules.js';
+export type { LintRule, RuleArea, RuleDerivation } from './rules.js';
+
+export { caseCollisions, exitCodeForSummary, lintSkill } from './lint.js';
+export type { LintOptions, LintResult, LintSummary } from './lint.js';

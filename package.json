@@ -16,9 +16,12 @@
     "typecheck": "tsc -b --force",
     "clean": "tsc -b --clean",
     "validate:profiles": "node scripts/validate-profiles.mjs",
+    "rules": "node scripts/generate-rule-catalog.mjs",
+    "rules:check": "node scripts/generate-rule-catalog.mjs --check",
     "test": "npm run build && node --test tests/*.test.mjs",
     "test:only": "node --test tests/*.test.mjs",
-    "inspect": "node packages/cli/dist/index.js inspect"
+    "inspect": "node packages/cli/dist/index.js inspect",
+    "lint": "node packages/cli/dist/index.js lint"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

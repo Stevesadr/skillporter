@@ -1,6 +1,7 @@
 import type { Diagnostic } from '@skillporter/core';
 import type { AgentProfile } from '@skillporter/core';
 import type { Detection } from '@skillporter/core';
+import type { LintResult } from '@skillporter/core';
 import type { SkillIR } from '@skillporter/core';
 
 function pad(value: string, width: number): string {
@@ -161,4 +162,68 @@ export function renderAgents(profiles: readonly AgentProfile[]): string {
   }
 
   return lines.join('\n').trimEnd();
+}
+
+function renderFinding(item: Diagnostic): string {
+  const location = item.file ? `${item.file}${item.line === undefined ? '' : `:${item.line}`}` : '';
+  const head = `  ${pad(item.severity, 8)}${pad(item.ruleId ?? '', 7)}${pad(location, 16)}${item.message}`;
+  const lines = [head.trimEnd()];
+  if (item.hint !== undefined) lines.push(indent(`hint: ${item.hint}`, 10));
+  if (item.fix !== undefined) lines.push(indent(`fix:  ${item.fix}`, 10));
+  if (item.source !== undefined) lines.push(indent(`see:  ${item.source}`, 10));
+  return lines.join('\n');
+}
+
+export function renderLint(result: LintResult, requestedPath: string): string {
+  const lines: string[] = [`${result.skill.identity}  ·  ${requestedPath}`, ''];
+
+  const { detection } = result.source;
+  const sourceLine = result.source.explicit
+    ? `${result.source.agent}  (given with --from)`
+    : result.source.assumed
+      ? `${result.source.agent}  (assumed: ${detection.reason})`
+      : `${result.source.agent}  (${detection.reason})`;
+
+  const rows: [string, string][] = [
+    ['target', `${result.target.displayName} (${result.target.id}) [${result.target.verification}]`],
+    ['source', sourceLine],
+    ['identity', `${result.skill.identity}  [from ${result.skill.identitySource}]`],
+    ['layout', result.skill.layout],
+  ];
+
+  const width = Math.max(...rows.map(([label]) => label.length));
+  for (const [label, value] of rows) lines.push(`  ${pad(label, width)}  ${value}`);
+
+  if (result.source.assumed) {
+    lines.push('');
+    if (detection.candidates.length > 0) {
+      lines.push(
+        `  ${pad('note', width)}  ${detection.matchedRoot ?? 'this location'} is read natively by ` +
+          `${detection.candidates.join(', ')}, so no single agent owns it.`,
+      );
+      lines.push(`  ${pad('', width)}  A source was assumed only to read the file; the rules below are ${result.target.id}'s.`);
+      lines.push(`  ${pad('', width)}  Pass --from to remove the assumption.`);
+    } else {
+      lines.push(
+        `  ${pad('note', width)}  A source was assumed only to read the file; the rules below are ${result.target.id}'s.`,
+      );
+    }
+  }
+
+  lines.push('');
+  if (result.findings.length === 0) {
+    lines.push(`  no findings for ${result.target.id}`);
+  } else {
+    for (const item of result.findings) lines.push(renderFinding(item));
+  }
+
+  const { summary } = result;
+  lines.push('');
+  if (summary.suppressed > 0) {
+    lines.push(`  ${summary.suppressed} unknown-capability finding(s) suppressed by --ignore-unknown`);
+  }
+  const tally = `${summary.errors} error(s), ${summary.warnings} warning(s), ${summary.info} info`;
+  const verdict = summary.result === 'error' ? 'error' : summary.result === 'warning' ? 'warnings' : 'ok';
+  lines.push(`  result  ${verdict}  ·  ${tally}`);
+  return lines.join('\n');
 }
