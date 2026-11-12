@@ -1,0 +1,157 @@
+id: deepseek-harness
+displayName: DeepSeek Harness (dsh)
+format: agent-skills
+verification: verified
+
+notes: >-
+  dsh reads the Agent Skills format natively and needs no manifest. It is in
+  developer preview and its README promises compatibility-breaking changes;
+  filesystem discovery is the most stable part. The old `.dsh-plugin` repository
+  plugin path was removed on 2026-08-09 with no compatibility parser, so any
+  tutorial describing `.dsh-plugin/plugin.json` is obsolete. Facts below were
+  confirmed against the repository source, not only the documentation, because
+  the generated config catalog is incomplete for the skill packages.
+
+paths:
+  project:
+    - path: <projectRoot>/.dsh/skills
+      scope: project
+      precedence: 100
+      note: Highest priority. projectRoot is the nearest ancestor containing .git; without one, the working directory is used.
+    - path: <projectRoot>/.agents/skills
+      scope: project
+      precedence: 200
+      note: Shared root, same layout other agents read.
+  global:
+    - path: <customSkillDirs[]>
+      scope: custom
+      precedence: 300
+      note: Extra roots from the dsh-skill-filesystem plugin config; scanned after project roots and before user roots.
+    - path: ~/.dsh/skills
+      scope: user
+      precedence: 400
+      note: $DSH_HOME when set. The `.system` child of this root is skipped.
+    - path: ~/.agents/skills
+      scope: user
+      precedence: 500
+      note: $DSH_AGENTS_HOME when set.
+    - path: <bundledSkillDir>
+      scope: system
+      precedence: 600
+      note: Only when configured, or $DSH_BUNDLED_SKILL_DIR when default roots are included.
+
+discovery:
+  skillDirDepth: 1
+  acceptsFlatMarkdown: true
+  followsSymlinks: true
+  upwardSearch: false
+  nestedLazyLoad: false
+  duplicateResolution: >-
+    Lowest rank number wins a duplicate skill name. Within one layer, provider
+    order then local order breaks ties; duplicate runtime entries are first-wins
+    with a logged warning.
+  note: >-
+    Recursive `**/SKILL.md` discovery is NOT supported. A skill nested two
+    directories below a root is invisible, not an error. A bare `<name>.md` file
+    in a root is also accepted as a flat skill. A root that fails to scan
+    contributes no candidates and logs a warning; the next lookup retries.
+
+name:
+  pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$'
+  maxLength: null
+  mustMatchDirectory: false
+  enforcement: silent-skip
+  note: >-
+    The grammar is enforced on the frontmatter `name`, which is the skill's
+    identity; the directory name is not validated and need not match. An invalid
+    or missing name is ignored with a logged warning rather than surfacing an
+    error, so the skill simply never appears in the catalog. Missing
+    `description`, or YAML that fails to parse, is ignored the same way.
+
+description:
+  maxLength: null
+  enforcement: truncate
+  truncation:
+    at: 500
+    unit: characters
+    configurableBy: catalogDescriptionMaxLength
+    note: >-
+      A display bound, not a validation rule: the value is set on the consumer
+      (dsh-tool-skill), default 500, minimum 3. Only the name and an XML-escaped
+      description are injected into the model catalog, so an over-long
+      description is shortened rather than rejected. The skill still loads by name.
+  note: The filesystem provider only requires a non-empty string.
+
+limits: {}
+
+fieldAliases:
+  when_to_use: whenToUse
+
+fields:
+  name:
+    status: supported
+    note: Required. Kebab-case only; also used as the identifier the skill tool accepts.
+  description:
+    status: supported
+  whenToUse:
+    status: supported
+    note: >-
+      CamelCase here, unlike Claude Code's `when_to_use`. Optional extra trigger
+      text; the only other frontmatter key read by the filesystem provider.
+  disable-model-invocation:
+    status: supported
+    note: Read by the filesystem provider; defaults to true (model-invocable) when omitted.
+  user-invocable:
+    status: supported
+    note: Read by the filesystem provider; defaults to true when omitted.
+  license:
+    status: ignored
+    note: Parsed into the metadata bag and otherwise ignored.
+  compatibility:
+    status: ignored
+    note: Parsed into the metadata bag and otherwise ignored.
+  metadata:
+    status: ignored
+    note: Parsed into the metadata bag; not promoted into the domain model.
+  allowed-tools:
+    status: ignored
+    note: Parsed into the metadata bag and otherwise ignored. dsh has no equivalent pre-approval.
+
+extensions:
+  - id: invocation-policy-pair
+    description: >-
+      Two independent booleans, modelInvocable and userInvocable, are derived
+      from disable-model-invocation and user-invocable; all four combinations
+      are preserved by the registry.
+    fidelityImpact: adapted
+  - id: catalog-description-bound
+    description: >-
+      The catalog injected into the model contains only name and an XML-escaped,
+      length-bounded description, sorted; bodies, paths, sources and routing
+      hints are omitted.
+    fidelityImpact: degraded
+  - id: layered-registry
+    description: >-
+      Skills come from layered providers with explicit ranks; a failed root
+      silently contributes nothing while lower-priority roots keep serving.
+    fidelityImpact: adapted
+  - id: profile-bundle-distribution
+    description: >-
+      Packaged extensions are installed as profile bundles that declare
+      dsh.bundle.patch and mount the skill-filesystem plugin; there is no
+      per-skill manifest.
+    fidelityImpact: dropped
+
+sources:
+  - url: https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/subsystems/skills.md
+    retrieved: 2026-11-12
+    note: Discovery ranks, identity rules, catalog bound, invocation policy.
+  - url: https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/skill/skill-filesystem/src/index.ts
+    retrieved: 2026-11-12
+    note: Verified Config keys/defaults and the ignore-with-warning behaviour directly in source.
+  - url: https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/skill/skill/src/index.ts
+    retrieved: 2026-11-12
+    note: Verified SKILL_NAME regex and candidate/definition validation.
+  - url: https://github.com/pasqal-io/agent-marketplace/blob/main/docs/agents/deepseek-harness.md
+    retrieved: 2026-11-12
+    note: Third-party walkthrough; used as a cross-check, not as the primary source.

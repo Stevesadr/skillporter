@@ -1,0 +1,203 @@
+id: claude-code
+displayName: Claude Code
+format: agent-skills
+verification: verified
+
+notes: >-
+  Claude Code implements the Agent Skills spec and extends it heavily. Two
+  distinct surfaces exist and they are NOT the same target: (a) local Claude
+  Code skill directories, which accept every field below, and (b) uploading a
+  skill to claude.ai / the Skills API / package_skill.py, which accepts ONLY
+  name, description, license, compatibility, metadata and allowed-tools and
+  hard-errors on any other key. This profile describes (a). Emitting for (b)
+  must be modelled as a separate target.
+
+paths:
+  project:
+    - path: .claude/skills
+      scope: project
+      note: Scanned in the start directory and every ancestor up to the repository root.
+    - path: <subdir>/.claude/skills
+      scope: project
+      note: Not loaded at startup; loads the first time Claude reads or edits a file in that subdirectory, then persists for the session.
+    - path: <add-dir>/.claude/skills
+      scope: project
+      note: Only for directories passed with --add-dir; clashes get a prefixed command name.
+  global:
+    - path: ~/.claude/skills
+      scope: user
+    - path: ~/.claude/skills/synced
+      scope: user
+      note: Reserved. Written by claude.ai account sync; the name `synced` is reserved and `anthropic-skills` is a reserved namespace.
+    - path: <managed-settings-dir>/.claude/skills
+      scope: admin
+      note: Enterprise scope, e.g. /etc/claude-code/.claude/skills on Linux.
+    - path: <plugin-root>/skills
+      scope: plugin
+      note: Invoked as /plugin-name:skill-name.
+
+discovery:
+  skillDirDepth: 1
+  acceptsFlatMarkdown: false
+  followsSymlinks: true
+  upwardSearch: true
+  nestedLazyLoad: true
+  duplicateResolution: >-
+    Enterprise > Personal > Project. A user or project skill replaces a bundled
+    skill or built-in command. A skill beats a .claude/commands file of the same
+    name. Root and nested skills with the same name both load; the nested one is
+    addressed as /subdir/path:name.
+  note: >-
+    Skill folders may be symlinks to directories and load once even when several
+    locations point at the same target. Changes in watched skill directories are
+    picked up mid-session.
+
+name:
+  pattern: null
+  maxLength: null
+  mustMatchDirectory: false
+  enforcement: silent-skip
+  note: >-
+    The spec's kebab-case grammar is NOT enforced. `name` is optional and
+    defaults to the directory name; the directory name also remains a valid
+    invocation. A skill or command whose name contains zero-width or control
+    characters, private-use characters, direction-changing characters, `<`, `>`,
+    or blanks other than a single plain space between words will not load.
+
+description:
+  maxLength: null
+  enforcement: truncate
+  truncation:
+    at: 1536
+    unit: characters
+    combinesWith:
+      - when_to_use
+    note: >-
+      Applies to the skill listing only. Put the key use case first. Angle
+      brackets are escaped in synced-skill descriptions.
+  note: >-
+    No hard maximum is enforced on the stored description; the spec's 1024-char
+    ceiling is not a Claude Code validation rule. If `description` is omitted
+    the first non-empty Markdown line is used.
+
+limits: {}
+
+fields:
+  name:
+    status: supported
+    note: Optional. Defaults to the directory name; also invocable by directory name.
+  description:
+    status: supported
+  when_to_use:
+    status: supported
+    note: >-
+      The only field spelled with underscores rather than hyphens. Appended to
+      description in the listing and counts toward the 1536-char cap.
+  argument-hint:
+    status: supported
+    note: Autocomplete hint such as [issue-number].
+  arguments:
+    status: supported
+    note: Named positional arguments for $name substitution; space-separated string or YAML list.
+  disable-model-invocation:
+    status: supported
+    note: >-
+      true means Claude cannot auto-load the skill; /name only. Also blocks
+      preloading into subagents. Default false.
+  user-invocable:
+    status: supported
+    note: false hides the skill from the / menu so only Claude can invoke it. Default true.
+  allowed-tools:
+    status: supported
+    note: >-
+      Pre-approves tools for the turn that invokes the skill only; the grant
+      clears on the next message. It does not restrict which tools exist. Space-
+      or comma-separated string, or a YAML list. Deny rules still override.
+  disallowed-tools:
+    status: supported
+    note: Removes tools from the pool while the skill is active; clears on the next message.
+  model:
+    status: supported
+    note: Applies for the rest of the current turn only. With context fork it sets the forked subagent's model.
+  effort:
+    status: supported
+    note: One of low, medium, high, xhigh, max. Overrides the session but not CLAUDE_CODE_EFFORT_LEVEL.
+  context:
+    status: supported
+    note: Set to exactly `fork` to run the skill in a forked subagent context.
+  agent:
+    status: supported
+    note: Subagent type used with context fork. Default general-purpose.
+  background:
+    status: supported
+    note: Only meaningful with context fork. Default true.
+  hooks:
+    status: supported
+    note: Registered at invocation and kept for the rest of the session.
+  paths:
+    status: supported
+    note: Glob patterns limiting auto-activation to matching files; relative to Claude's working directory.
+  shell:
+    status: supported
+    note: bash (default) or powershell, for dynamic context injection blocks.
+  metadata:
+    status: ignored
+    mapsTo: null
+    note: >-
+      Accepted and preserved verbatim in the file, but Claude Code does not act
+      on it. Non-map values are dropped. Do not reuse frontmatter field names as keys.
+  license:
+    status: ignored
+    note: Accepted per the Agent Skills spec; Claude Code does not act on it.
+  compatibility:
+    status: ignored
+    note: Accepted per the Agent Skills spec (string, max 500 chars); Claude Code does not act on it.
+
+extensions:
+  - id: context-fork
+    description: >-
+      context fork runs the skill body as the prompt of a new subagent with no
+      conversation history, in the background by default. No other surveyed
+      agent has an equivalent.
+    fidelityImpact: dropped
+  - id: dynamic-shell-injection
+    description: >-
+      Inline !`command` placeholders and fenced ```! blocks are executed before
+      the body is sent and the output replaces the placeholder. A non-zero exit
+      aborts the whole invocation.
+    fidelityImpact: dropped
+  - id: argument-substitution
+    description: >-
+      $ARGUMENTS, $ARGUMENTS[N], $N, $name, ${CLAUDE_SESSION_ID},
+      ${CLAUDE_EFFORT}, ${CLAUDE_SKILL_DIR}, ${CLAUDE_PROJECT_DIR},
+      ${CLAUDE_PLUGIN_ROOT}, ${CLAUDE_PLUGIN_DATA} are substituted in the body
+      and in allowed-tools Bash rules.
+    fidelityImpact: dropped
+  - id: turn-scoped-tool-grant
+    description: >-
+      allowed-tools grants apply to the invoking turn only and clear on the next
+      message, unlike a persistent allowlist.
+    fidelityImpact: dropped
+  - id: path-gated-activation
+    description: The paths field limits auto-activation to files matching the given globs.
+    fidelityImpact: dropped
+  - id: hooks-registration
+    description: The hooks field registers lifecycle hooks when the skill is invoked.
+    fidelityImpact: dropped
+  - id: plugin-namespacing
+    description: Plugin skills are addressed as /plugin-name:skill-name.
+    fidelityImpact: dropped
+  - id: progressive-disclosure-budget
+    description: >-
+      Auto-compaction re-attaches the latest invocation of each skill, keeping
+      the first 5000 tokens each within a combined 25000-token budget, most
+      recent first.
+    fidelityImpact: degraded
+
+sources:
+  - url: https://agentskills.io/specification
+    retrieved: 2026-11-12
+    note: Base format, field constraints, progressive disclosure.
+  - url: https://code.claude.com/docs/en/skills
+    retrieved: 2026-11-12
+    note: Scopes, precedence, full frontmatter reference, substitutions, extensions.

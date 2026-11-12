@@ -1,0 +1,153 @@
+id: codex-cli
+displayName: Codex CLI
+format: agent-skills
+verification: verified
+
+notes: >-
+  Codex reads skills from a shared `.agents/skills` root, not from a
+  `.codex/skills` directory. The same root is read by DeepSeek Harness and
+  OpenCode, which makes `.agents/skills` the de facto interop point between
+  agents and the natural default output target. Optional presentation and
+  policy metadata lives in a sidecar `agents/openai.yaml` inside the skill
+  directory, not in SKILL.md frontmatter.
+
+paths:
+  project:
+    - path: <cwd>/.agents/skills
+      scope: project
+      note: Scanned when Codex is launched in the current working directory.
+    - path: <ancestor>/.agents/skills
+      scope: project
+      note: Every ancestor directory from the working directory up to the repository root is scanned, not just one level.
+    - path: <repoRoot>/.agents/skills
+      scope: project
+      note: Topmost root; serves as root skills for any subfolder of the repository.
+  global:
+    - path: ~/.agents/skills
+      scope: user
+      note: Applies to any repository the user works in.
+    - path: /etc/codex/skills
+      scope: admin
+      note: Machine or container-wide shared location.
+    - path: <bundled-with-codex>
+      scope: system
+      note: Ships skill-creator and skill-installer; enabled by default.
+
+discovery:
+  skillDirDepth: 1
+  acceptsFlatMarkdown: false
+  followsSymlinks: true
+  upwardSearch: true
+  nestedLazyLoad: false
+  duplicateResolution: >-
+    Duplicate names are NOT merged; both skills can appear in the skill
+    selectors.
+  note: >-
+    Skill changes are detected automatically; a restart is the fallback when an
+    update does not appear.
+
+name:
+  pattern: null
+  maxLength: null
+  mustMatchDirectory: null
+  enforcement: unknown
+  note: >-
+    UNVERIFIED. The official docs state only that SKILL.md must include `name`
+    and `description`; they do not document a character grammar, a length bound,
+    or what happens to a violating skill. Encode the spec grammar on emit and
+    warn rather than assuming acceptance.
+
+description:
+  maxLength: null
+  enforcement: truncate
+  truncation:
+    at: 8000
+    unit: characters
+    configurableBy: skills.max_context_tokens
+    note: >-
+      The initial skills list is capped at 2% of the model context window, or
+      8000 characters when the window is unknown. If many skills are installed,
+      Codex shortens descriptions first, and may omit skills from the list with a
+      warning. skills.max_context_tokens can raise the budget to at most 10000
+      tokens. This bound applies only to the initial list; the full SKILL.md is
+      read once the skill is selected.
+  note: >-
+    Front-load the key use case and trigger words so a shortened description
+    still matches.
+
+limits: {}
+
+fields:
+  name:
+    status: supported
+  description:
+    status: supported
+  license:
+    status: unknown
+    note: Not documented. Emit it; the spec allows it and it is unlikely to be rejected.
+  compatibility:
+    status: unknown
+    note: Not documented.
+  metadata:
+    status: unknown
+    note: Not documented.
+  allowed-tools:
+    status: unknown
+    note: Not documented. No equivalent pre-approval mechanism is described.
+  policy.allow_implicit_invocation:
+    status: supported
+    note: >-
+      Set in agents/openai.yaml. false stops implicit invocation from a matching
+      prompt; explicit $skill invocation still works. Default true. This is the
+      closest analogue of Claude Code's disable-model-invocation.
+  interface.display_name:
+    status: supported
+    note: agents/openai.yaml. Presentation metadata for the ChatGPT desktop app.
+  interface.short_description:
+    status: supported
+    note: agents/openai.yaml. Presentation metadata for the ChatGPT desktop app.
+  interface.icon_small:
+    status: supported
+    note: agents/openai.yaml. Path relative to the skill directory.
+  interface.icon_large:
+    status: supported
+    note: agents/openai.yaml. Path relative to the skill directory.
+  interface.brand_color:
+    status: supported
+    note: agents/openai.yaml.
+  interface.default_prompt:
+    status: supported
+    note: agents/openai.yaml. Surrounding prompt used when the skill is picked.
+  dependencies.tools:
+    status: supported
+    note: agents/openai.yaml. Declares tool dependencies such as MCP servers.
+
+extensions:
+  - id: agents-openai-yaml
+    description: >-
+      Sidecar agents/openai.yaml carries interface, policy and dependency
+      metadata. A skill directory is still valid without it.
+    fidelityImpact: dropped
+  - id: config-disable-list
+    description: >-
+      [[skills.config]] entries in ~/.codex/config.toml disable a skill by
+      absolute path or by name without deleting it; the last matching entry wins.
+    fidelityImpact: dropped
+  - id: plugin-distribution
+    description: >-
+      Skills can be bundled into plugins together with MCP server connections
+      and presentation assets for distribution.
+    fidelityImpact: dropped
+  - id: catalog-path-listing
+    description: >-
+      The initial skill list shown to the model includes each skill's file path,
+      unlike the name-and-description-only catalogs other agents build.
+    fidelityImpact: degraded
+
+sources:
+  - url: https://developers.openai.com/codex/skills
+    retrieved: 2026-11-12
+    note: Paths and scopes, context budget, agents/openai.yaml, [[skills.config]].
+  - url: https://agentskills.io/specification
+    retrieved: 2026-11-12
+    note: Base format and field constraints.

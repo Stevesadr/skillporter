@@ -1,0 +1,245 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://skillporter.dev/schema/agent-profile.schema.json",
+  "title": "Agent capability profile",
+  "description": "Declarative description of one agent's skill format support. Everything the converter needs to know about a target agent lives here; adding an agent should not require code unless the agent uses a non-SKILL.md format.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "displayName",
+    "format",
+    "verification",
+    "paths",
+    "discovery",
+    "name",
+    "description",
+    "fields",
+    "sources"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "description": "Stable machine identifier. Used as `--from`/`--to` value and as the profile filename stem."
+    },
+    "displayName": {
+      "type": "string",
+      "minLength": 1
+    },
+    "format": {
+      "enum": ["agent-skills", "proprietary"],
+      "description": "`agent-skills` means the agent reads the Agent Skills layout natively and a data-only profile is sufficient. `proprietary` means a custom adapter is required."
+    },
+    "verification": {
+      "enum": ["verified", "partial", "unverified"],
+      "description": "`verified`: every encoded fact traced to a primary source. `partial`: at least one fact is inferred or only documented by a third party. `unverified`: profile is a placeholder."
+    },
+    "notes": {
+      "type": "string"
+    },
+    "paths": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["project", "global"],
+      "properties": {
+        "project": { "$ref": "#/$defs/pathList" },
+        "global": { "$ref": "#/$defs/pathList" }
+      }
+    },
+    "discovery": { "$ref": "#/$defs/discovery" },
+    "name": { "$ref": "#/$defs/nameRules" },
+    "description": { "$ref": "#/$defs/descriptionRules" },
+    "limits": { "$ref": "#/$defs/limits" },
+    "fieldAliases": {
+      "type": "object",
+      "description": "Maps a foreign spelling of a field to the spelling this agent uses, so the pipeline can rename instead of dropping. Only needed where agents disagree on capitalisation or separators.",
+      "propertyNames": { "pattern": "^[A-Za-z0-9_.:-]+$" },
+      "additionalProperties": { "type": "string", "minLength": 1 }
+    },
+    "fields": {
+      "type": "object",
+      "description": "Per-frontmatter-field support. Keys are the field names as the target agent spells them. Any field absent from this map must be treated as `unknown` by the converter, which then warns instead of guessing.",
+      "minProperties": 1,
+      "propertyNames": { "pattern": "^[A-Za-z0-9_.:-]+$" },
+      "additionalProperties": { "$ref": "#/$defs/field" }
+    },
+    "extensions": {
+      "type": "array",
+      "description": "Agent-specific behaviours with no equivalent elsewhere. Listed so the report can name what a conversion loses.",
+      "items": { "$ref": "#/$defs/extension" }
+    },
+    "sources": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/source" }
+    }
+  },
+  "$defs": {
+    "pathList": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/pathEntry" }
+    },
+    "pathEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "scope"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Use `~` for the user home, `<angle-brackets>` for values only known at runtime."
+        },
+        "scope": {
+          "enum": ["project", "user", "admin", "system", "plugin", "custom"]
+        },
+        "precedence": {
+          "type": ["integer", "null"],
+          "description": "Lower wins. null when the agent does not document an ordering."
+        },
+        "note": { "type": "string" }
+      }
+    },
+    "discovery": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["skillDirDepth", "acceptsFlatMarkdown", "followsSymlinks", "upwardSearch"],
+      "properties": {
+        "skillDirDepth": {
+          "oneOf": [
+            { "type": "integer", "minimum": 1 },
+            { "const": "recursive" }
+          ],
+          "description": "How many directory levels below a root a skill directory may sit and still be found."
+        },
+        "acceptsFlatMarkdown": {
+          "type": "boolean",
+          "description": "Whether a bare `<name>.md` file is loaded as a skill, in addition to `<name>/SKILL.md`."
+        },
+        "followsSymlinks": { "type": "boolean" },
+        "upwardSearch": {
+          "type": "boolean",
+          "description": "Whether roots are also scanned in ancestor directories up to the repository root."
+        },
+        "nestedLazyLoad": {
+          "type": "boolean",
+          "description": "Whether skills in directories below the working directory load on demand instead of at startup."
+        },
+        "duplicateResolution": {
+          "type": "string"
+        },
+        "note": { "type": "string" }
+      }
+    },
+    "nameRules": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pattern", "maxLength", "mustMatchDirectory", "enforcement"],
+      "properties": {
+        "pattern": {
+          "type": ["string", "null"],
+          "description": "ECMAScript regex the name must match, or null when the agent imposes no character grammar."
+        },
+        "maxLength": { "type": ["integer", "null"], "minimum": 1 },
+        "mustMatchDirectory": { "type": ["boolean", "null"] },
+        "enforcement": {
+          "enum": ["reject", "silent-skip", "truncate", "none", "unknown"],
+          "description": "What the agent does when a name violates the rules."
+        },
+        "note": { "type": "string" }
+      }
+    },
+    "descriptionRules": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["maxLength", "enforcement"],
+      "properties": {
+        "maxLength": {
+          "type": ["integer", "null"],
+          "description": "Hard validation limit, or null when the agent never rejects an over-long description."
+        },
+        "enforcement": {
+          "enum": ["reject", "silent-skip", "truncate", "none", "unknown"]
+        },
+        "truncation": { "$ref": "#/$defs/truncation" },
+        "note": { "type": "string" }
+      }
+    },
+    "truncation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["at", "unit"],
+      "properties": {
+        "at": { "type": "integer", "minimum": 1 },
+        "unit": { "enum": ["characters", "tokens"] },
+        "configurableBy": {
+          "type": "string",
+          "description": "Config key that changes the bound, if any."
+        },
+        "combinesWith": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Other fields that count toward the same budget."
+        },
+        "note": { "type": "string" }
+      }
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "maxFileBytes": { "type": ["integer", "null"] },
+        "maxSkillBytes": { "type": ["integer", "null"] },
+        "maxFiles": { "type": ["integer", "null"] },
+        "maxCatalogBudgetTokens": { "type": ["integer", "null"] },
+        "note": { "type": "string" }
+      }
+    },
+    "field": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status"],
+      "properties": {
+        "status": { "$ref": "#/$defs/fieldStatus" },
+        "mapsTo": {
+          "type": ["string", "null"],
+          "description": "Target field that carries the same meaning, when it is spelled differently."
+        },
+        "note": { "type": "string" },
+        "source": { "type": "string" }
+      }
+    },
+    "fieldStatus": {
+      "enum": ["supported", "ignored", "emulated", "unsupported", "unknown"],
+      "description": "supported: honoured with equivalent semantics. ignored: accepted but has no effect. emulated: the converter can approximate it through another mechanism. unsupported: no equivalent exists. unknown: not verified."
+    },
+    "extension": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "description", "fidelityImpact"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
+        "description": { "type": "string" },
+        "fidelityImpact": {
+          "enum": ["preserved", "adapted", "degraded", "dropped"],
+          "description": "Best achievable outcome when this extension is present in the source and the target is another agent."
+        },
+        "source": { "type": "string" }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["url", "retrieved"],
+      "properties": {
+        "url": { "type": "string", "pattern": "^https?://" },
+        "retrieved": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+        },
+        "note": { "type": "string" }
+      }
+    }
+  }
+}

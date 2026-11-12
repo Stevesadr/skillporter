@@ -1,0 +1,22 @@
+{
+  "name": "skillporter-monorepo",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Convert AI agent skills between agent-specific formats, with an explicit fidelity report.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22.20.0"
+  },
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "validate:profiles": "node scripts/validate-profiles.mjs",
+    "test": "node --test tests/*.test.mjs"
+  },
+  "devDependencies": {
+    "ajv": "^8.17.1",
+    "yaml": "^2.6.1"
+  }
+}
