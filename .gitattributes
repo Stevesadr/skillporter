@@ -1,0 +1,21 @@
+# Every text file is checked out with LF on every platform.
+#
+# The test suite and the generators compare bytes, not lines: the IR records the
+# source line ending and asserts it (tests/parse.test.mjs expects the fixtures to
+# be LF), the body hash is taken over exact bytes, and `npm run rules:check`
+# compares docs/lint-rules.md with a freshly generated string. Git's default
+# `core.autocrlf=true` on Windows would rewrite those files to CRLF on checkout,
+# so the same commit would behave differently there. Pinning the working tree to
+# LF keeps every platform testing the same bytes.
+#
+# skillporter itself still handles CRLF input correctly: it records and
+# preserves whatever line ending a skill actually uses. This file is about the
+# repository's own files, not about what the tool accepts.
+* text=auto eol=lf
+
+# Binary fixtures must never be normalised or diffed as text.
+*.png binary
+*.jpg binary
+*.gif binary
+*.woff binary
+*.woff2 binary
