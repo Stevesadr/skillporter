@@ -924,6 +924,25 @@ test('report: post-conversion lint is run on the output, not on the source', asy
   assert.equal(itemsOf(target, 'layout')[0].fidelity, 'adapted');
 });
 
+test('report: a staging root that does not exist yet is created, not rejected', async (t) => {
+  const dir = await sandbox(t);
+  // `stagingRoot` is a caller-supplied location, so it may not exist. Failing
+  // with ENOENT from deep inside the lint step would blame the wrong thing.
+  const stagingRoot = join(dir, 'does', 'not', 'exist', 'yet');
+
+  const report = await convertSkill({
+    path: resolve(ROOT, SIMPLE),
+    from: 'claude-code',
+    to: ['codex-cli'],
+    out: join(dir, 'out'),
+    stagingRoot,
+  });
+
+  assert.ok(existsSync(stagingRoot), 'the staging root should have been created');
+  assert.equal(report.targets[0].lint.summary.errors, 0);
+  assert.ok(existsSync(join(dir, 'out', 'changelog-writer', 'SKILL.md')));
+});
+
 test('report: a clean conversion exits 0, a loss exits 2, --strict exits 1, a broken output exits 1', async (t) => {
   const out = await sandbox(t);
   const clean = await convert({ path: resolve(ROOT, SIMPLE), from: 'claude-code', to: ['codex-cli'], out: join(out, '1') });

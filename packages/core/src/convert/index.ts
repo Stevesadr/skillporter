@@ -66,12 +66,16 @@ function planFiles(plan: PlannedSkill) {
  * copy is not inside a discovery root, so location-dependent rules (depth,
  * duplicate names) stay silent here; they are evaluated by `lint` at the real
  * destination.
+ *
+ * The staging root is created if it is missing: it is a caller-supplied
+ * location, and failing with ENOENT would blame the wrong thing.
  */
 async function lintOutput(
   plan: PlannedSkill,
   targetId: string,
   stagingRoot: string,
 ): Promise<NonNullable<TargetReport['lint']>> {
+  await mkdir(stagingRoot, { recursive: true });
   const staging = await mkdtemp(join(stagingRoot, 'skillporter-out-'));
   try {
     const skillDir = join(staging, plan.directoryName);
