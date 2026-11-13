@@ -218,13 +218,21 @@ test('golden: a report with bundled files copies them byte-for-byte and keeps th
     assert.ok(copy.equals(source), `${relative} was not copied byte-for-byte`);
   }
 
-  // The executable bit is part of the skill, so it is preserved and reported.
-  if (process.platform !== 'win32') {
-    const mode = (await stat(join(written, 'scripts/build_report.py'))).mode & 0o777;
-    assert.equal(mode, 0o755);
-  }
+  // The mode the report states has to be the mode the file actually has on this
+  // platform. NTFS has no executable bit, so on Windows a 0755 source is
+  // checked out as 0666 and reported as 0666 — nothing was lost, because the
+  // source never carried the bit there either.
+  const sourceMode = (await stat(join(ROOT, REPORT_BUILDER, 'scripts/build_report.py'))).mode & 0o777;
   const script = target.files.find((file) => file.path === 'scripts/build_report.py');
-  assert.equal(script.mode, '0755');
+  assert.equal(script.mode, sourceMode.toString(8).padStart(4, '0'), 'the report must state the mode that was applied');
+
+  if (process.platform !== 'win32') {
+    // Guard the fixture itself: if the checkout ever lost the executable bit,
+    // the assertion above would still pass while testing nothing.
+    assert.equal(sourceMode, 0o755, 'the fixture script should be executable in the repository');
+    const copied = (await stat(join(written, 'scripts/build_report.py'))).mode & 0o777;
+    assert.equal(copied, 0o755, 'the executable bit must survive the copy');
+  }
 });
 
 test('golden: the body keeps Persian text and CRLF line endings untouched', async (t) => {
