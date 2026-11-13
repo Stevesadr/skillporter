@@ -653,13 +653,16 @@ test('install: --global writes under the user-level root, never outside a docume
 });
 
 test('roots: a path that depends on how the agent was launched is not a candidate', async () => {
-  const context = { projectRoot: '/work/project', home: '/home/person' };
+  // Built with the same primitives the resolver uses, so the expectation is
+  // native on every platform rather than a hard-coded POSIX path.
+  const context = { projectRoot: resolve('/work/project'), home: resolve('/home/person') };
+  const under = (base, ...parts) => join(base, ...parts);
 
   // Resolvable: placeholders that name the project root itself.
-  assert.equal(resolveDocumentedPath('<cwd>/.agents/skills', context, 'project'), '/work/project/.agents/skills');
-  assert.equal(resolveDocumentedPath('<projectRoot>/.dsh/skills', context, 'project'), '/work/project/.dsh/skills');
-  assert.equal(resolveDocumentedPath('.claude/skills', context, 'project'), '/work/project/.claude/skills');
-  assert.equal(resolveDocumentedPath('~/.agents/skills', context, 'global'), '/home/person/.agents/skills');
+  assert.equal(resolveDocumentedPath('<cwd>/.agents/skills', context, 'project'), under(context.projectRoot, '.agents', 'skills'));
+  assert.equal(resolveDocumentedPath('<projectRoot>/.dsh/skills', context, 'project'), under(context.projectRoot, '.dsh', 'skills'));
+  assert.equal(resolveDocumentedPath('.claude/skills', context, 'project'), under(context.projectRoot, '.claude', 'skills'));
+  assert.equal(resolveDocumentedPath('~/.agents/skills', context, 'global'), under(context.home, '.agents', 'skills'));
 
   // Not resolvable: these depend on launch flags or the environment.
   for (const documented of ['<subdir>/.claude/skills', '<add-dir>/.claude/skills', '<managed-settings-dir>/.claude/skills', '$KIMI_CODE_HOME/skills', '<customSkillDirs[]>']) {
