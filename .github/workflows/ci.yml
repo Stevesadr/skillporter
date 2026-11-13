@@ -49,11 +49,33 @@ jobs:
       - name: Smoke test the CLI
         shell: bash
         run: |
-          node packages/cli/dist/index.js agents
-          node packages/cli/dist/index.js inspect fixtures/skills/simple-prompt --from claude-code
+          set -euo pipefail
+          node packages/cli/dist/index.js agents > /dev/null
+          node packages/cli/dist/index.js inspect fixtures/skills/simple-prompt --from claude-code > /dev/null
           node packages/cli/dist/index.js inspect fixtures/skills/report-builder --from claude-code --json > /dev/null
-          node packages/cli/dist/index.js lint fixtures/skills/simple-prompt --for opencode
-          node packages/cli/dist/index.js lint fixtures/skills/report-builder --for claude-code --format json > /dev/null
+
+          # `lint` exits 2 when it reports warnings only. That is a documented
+          # result, not a failure, so the code is checked explicitly instead of
+          # relying on errexit. A crash would also exit non-zero, so the rendered
+          # report is checked for content as well.
+          out="$(mktemp -d)"
+          set +e
+          node packages/cli/dist/index.js lint fixtures/skills/simple-prompt --for opencode > "$out/lint.txt" 2> "$out/lint.err"
+          text_code=$?
+          node packages/cli/dist/index.js lint fixtures/skills/report-builder --for claude-code --format json > "$out/lint.json" 2> "$out/lint-json.err"
+          json_code=$?
+          set -e
+
+          echo "lint text: exit $text_code; lint json: exit $json_code"
+          for code in "$text_code" "$json_code"; do
+            case "$code" in
+              0|1|2) ;;
+              *) echo "lint exited $code, which is not one of the documented codes 0, 1 or 2" >&2; exit 1 ;;
+            esac
+          done
+          grep -q 'result' "$out/lint.txt"
+          node -e "const r = JSON.parse(require('node:fs').readFileSync(process.argv[1], 'utf8')); if (!Array.isArray(r.findings)) throw new Error('lint JSON has no findings array');" "$out/lint.json"
+          rm -rf "$out"
 
       - name: Check the documented exit codes
         shell: bash
