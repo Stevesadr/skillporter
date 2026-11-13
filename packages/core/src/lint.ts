@@ -18,6 +18,8 @@ export interface LintOptions {
   from?: string;
   /** Suppress UNKNOWN_CAPABILITY findings. */
   ignoreUnknown?: boolean;
+  /** Show informational findings that only restate something that is not a problem. */
+  verbose?: boolean;
   limits?: Partial<ToolLimits>;
 }
 
@@ -240,6 +242,16 @@ export async function lintSkill(options: LintOptions): Promise<LintResult> {
   if (sourceAgentId === undefined) throw new ProfileError('no capability profiles are installed');
   const assumed = inferred === undefined;
 
+  /**
+   * Whether the source agent's behaviour is actually known.
+   *
+   * An assumed source is a guess made only so the file can be read. Anything
+   * that compares the source's behaviour with the target's must not treat that
+   * guess as a fact, or the severity of a finding would change depending on
+   * which agent happened to be picked.
+   */
+  const sourceKnown = options.from !== undefined || detection.agent !== null;
+
   const { ir } = await parseSkill({
     path: options.path,
     from: sourceAgentId,
@@ -383,6 +395,9 @@ export async function lintSkill(options: LintOptions): Promise<LintResult> {
   }
 
   // ---- SP005: identity source ----------------------------------------------
+  // A label that agrees with the path is not a finding: it is the documented,
+  // lossless arrangement. It is shown under --verbose because it explains which
+  // string the target addresses the skill by, and stays silent otherwise.
   if (target.identity.source === 'path') {
     const label = frontmatterName;
     if (label !== undefined && label !== identity.name) {
@@ -397,14 +412,14 @@ export async function lintSkill(options: LintOptions): Promise<LintResult> {
           detail: { identity: identity.name, label },
         },
       );
-    } else {
+    } else if (options.verbose === true) {
       emit(findings, 'SP005', 'info', `${target.displayName} takes the identity from the path: "${identity.name}"`, {
         file,
         hint: `${target.id} does not consult frontmatter for the identifier.`,
         detail: { identity: identity.name },
       });
     }
-  } else if (frontmatterName === undefined && identity.required !== true) {
+  } else if (frontmatterName === undefined && identity.required !== true && options.verbose === true) {
     emit(
       findings,
       'SP005',
@@ -573,47 +588,65 @@ export async function lintSkill(options: LintOptions): Promise<LintResult> {
   }
 
   // ---- SP016 / SP017: shell syntax -----------------------------------------
+  // A comparison between two agents is only as good as the source. When the
+  // source was assumed, its behaviour is unknown, and the finding says so
+  // instead of inheriting a severity from a guess.
   const targetExecutes = target.bodyExecution.shellInjection.executed;
-  const sourceExecutes = source?.bodyExecution.shellInjection.executed;
+  const sourceExecutes: true | false | 'unknown' = sourceKnown
+    ? (source?.bodyExecution.shellInjection.executed ?? 'unknown')
+    : 'unknown';
   const occurrences = ir.shellInjection;
+  const sourcePhrase = sourceKnown
+    ? sourceExecutes === true
+      ? 'the source agent executed it'
+      : sourceExecutes === false
+        ? 'the source agent only displayed it'
+        : 'whether the source agent executed it is not documented'
+    : `the source agent was assumed, not verified, so whether it executed this is unknown`;
 
   if (occurrences.length > 0) {
     if (targetExecutes === true) {
-      const severity: Severity = sourceExecutes === false ? 'error' : 'warning';
+      const severity: Severity = sourceKnown && sourceExecutes === false ? 'error' : 'warning';
       for (const occurrence of occurrences) {
         const what = occurrence.kind === 'fenced-bang' ? 'this ```! block' : 'this placeholder';
         emit(
           findings,
           'SP016',
           severity,
-          sourceExecutes === false
-            ? `${target.displayName} executes ${what} before the body is loaded, and the source agent only displayed it`
-            : `${target.displayName} executes ${what} before the body is loaded`,
+          severity === 'error'
+            ? `${target.displayName} executes ${what} before the body is loaded, and ${sourcePhrase}`
+            : `${target.displayName} executes ${what} before the body is loaded; ${sourcePhrase}`,
           {
             file,
             line: occurrence.line,
             column: occurrence.column,
             hint:
-              sourceExecutes === false
+              severity === 'error'
                 ? 'Converting to this agent would introduce execution the skill did not have. skillporter never runs it, but the target will.'
-                : 'skillporter never runs it. The behaviour is unchanged from the source agent.',
-            detail: { kind: occurrence.kind, command: occurrence.command, sourceExecuted: sourceExecutes ?? 'unknown' },
+                : 'skillporter never runs it. Whether this is new behaviour cannot be shown without a verified source agent.',
+            detail: {
+              kind: occurrence.kind,
+              command: occurrence.command,
+              sourceExecuted: sourceExecutes,
+              sourceKnown,
+            },
           },
         );
       }
     } else if (targetExecutes === false) {
+      const severity: Severity = sourceExecutes === false ? 'info' : 'warning';
       emit(
         findings,
         'SP017',
-        sourceExecutes === true ? 'warning' : 'info',
-        `${target.displayName} does not execute shell syntax in the body; ${occurrences.length} occurrence(s) will appear as literal text`,
+        severity,
+        `${target.displayName} does not execute shell syntax in the body; ${occurrences.length} occurrence(s) will appear as literal text, and ${sourcePhrase}`,
         {
           file,
           hint:
-            sourceExecutes === true
-              ? 'These placeholders expanded in the source agent. Here they are text the model reads, which changes the prompt.'
+            severity === 'warning'
+              ? 'These placeholders may have expanded in the source agent. Here they are text the model reads, which changes the prompt.'
               : 'Neither agent executes them, so nothing changes.',
-          detail: { count: occurrences.length, sourceExecuted: sourceExecutes ?? 'unknown' },
+          detail: { count: occurrences.length, sourceExecuted: sourceExecutes, sourceKnown },
         },
       );
     } else {

@@ -2,15 +2,18 @@
 
 Convert AI agent skills between agent formats — and get an honest report of what changed.
 
-> **Status: Phase 1b complete.** The IR, the parsers for all five agents, `inspect`, `agents`
-> and `lint` are working and tested on Linux, macOS and Windows. `convert` is not built yet,
-> and the package is not published. See [Roadmap](#roadmap).
+> **Status: Phase 1c complete.** The IR, the parsers for all five agents, `inspect`, `agents`,
+> `lint` and `convert` are working and tested on Linux, macOS and Windows. The package is not
+> published yet. See [Roadmap](#roadmap).
 
 ## Commands
 
 ```bash
 skillporter inspect <path> [--from <agent>] [--json]
 skillporter lint <path> --for <agent> [--from <agent>] [--format text|json] [--ignore-unknown]
+skillporter convert <path> --to <agent[,agent...]> [--from <agent|auto>] [--out DIR] [--install]
+                          [--global|--project] [--dry-run] [--strict] [--force]
+                          [--shell-injection=neutralize|keep|strip] [--report text|json|md]
 skillporter agents [--json]
 ```
 
@@ -172,16 +175,81 @@ machine-readable form is in [`agents/`](agents/).
 
 Every conversion classifies each field and feature as one of:
 
-| Category | Meaning |
-| --- | --- |
-| `preserved` | Carried over with identical meaning |
-| `adapted` | Carried over with a documented change (renamed, truncated, path moved) |
-| `degraded` | Carried over but the target will behave differently |
-| `dropped` | Cannot be represented; the target has no equivalent |
-| `unknown` | The target's behaviour is not verified |
+| Category | Meaning | Counts as a loss |
+| --- | --- | --- |
+| `preserved` | Carried over unchanged | no |
+| `adapted` | Changed so it keeps working (a flat `.md` wrapped in a directory, an inline placeholder turned into a code span) | no |
+| `renamed` | Same meaning, different spelling the target requires | no |
+| `degraded` | Still there, but the target will not act on it, or its behaviour is unknown | yes |
+| `dropped` | Cannot be represented; the target has no equivalent | yes |
 
 Exit codes: `0` clean, `1` error, `2` converted with degradations (make it fatal with
 `--strict`).
+
+The report is validated against [`schema/conversion-report.schema.json`](schema/conversion-report.schema.json),
+so `--report json` is stable enough to feed another tool.
+
+## Converting
+
+```bash
+# one copy per target under a directory you choose
+skillporter convert ./my-skill --to codex-cli,claude-code --out ./converted
+
+# straight into each agent's own skill directory
+skillporter convert ./my-skill --to codex-cli,deepseek-harness,kimi-code,opencode,claude-code --install
+
+# look, do not write
+skillporter convert ./my-skill --to claude-code --dry-run
+```
+
+```
+$ skillporter convert fixtures/skills/report-builder --from codex-cli --to claude-code --out /tmp/out
+report-builder  ·  fixtures/skills/report-builder
+
+  source   codex-cli (given with --from) · directory · identity report-builder · directory layout
+  mode     written under --out
+  targets  claude-code
+
+  Claude Code (claude-code)
+    → /tmp/out/report-builder
+    9 preserved · 3 adapted · 0 renamed · 1 degraded · 0 dropped
+      layout                              preserved directory layout kept
+      field:name                          preserved kept unchanged
+      field:description                   preserved kept unchanged; a display-only limit is reported by lint rather than enforced here
+      field:allowed-tools                 preserved kept verbatim
+      field:x-acme-owner                  degraded  claude-code's capability profile does not mention this field, so it was kept verbatim and its effect is unknown
+      body                                adapted   rewritten for claude-code: 2 shell occurrence(s) changed, everything else byte-exact
+      shell-injection:inline-bang@23      adapted   the placeholder was rewritten as a plain code span: claude-code would have executed it, and the source agent did not
+      shell-injection:fenced-bang@27      adapted   the placeholder was rewritten as a plain code span: claude-code would have executed it, and the source agent did not
+      file:assets/chart.png               preserved copied byte-for-byte
+      file:assets/logo.svg                preserved copied byte-for-byte
+      file:references/nested/checklist.md  preserved copied byte-for-byte
+      file:references/STYLE.md            preserved copied byte-for-byte
+      file:scripts/build_report.py        preserved copied byte-for-byte with the executable bit
+
+    lint of the output  warnings  ·  0 error(s), 1 warning(s), 0 info
+      warning SP013  "x-acme-owner" is not mentioned anywhere in the claude-code capability profile:5
+
+  roots
+    /tmp/out  [project]  write  for claude-code
+
+  note  post-conversion lint ran on a staged copy of each output, so rules that depend on the destination location are not part of it
+
+  result  converted with losses  ·  9 preserved · 3 adapted · 0 renamed · 1 degraded · 0 dropped
+```
+
+Notes that follow from the pipeline:
+
+- **The output is linted, not the source.** A flat `.md` is a lint error for an agent that
+  needs a directory, and wrapping it is exactly what `convert` just did — so that output is
+  reported clean.
+- **Nothing is ever executed.** A skill whose script would `touch` a file is converted without
+  running it; a test asserts this.
+- **Replacing is never silent.** An existing skill is an error unless `--force` is passed, and
+  the previous copy is moved to a timestamped `.skillporter-backups/` folder first.
+- **Four agents share `.agents/skills`.** Byte-identical outputs are written once. Outputs that
+  differ collapse to a least-common-denominator copy, and the loss is reported. Claude Code
+  always gets a real copy under `.claude/skills`, never a symlink.
 
 ## Honest limitations
 
@@ -212,9 +280,14 @@ silence is the enemy.
 - **Shell-injection syntax is neutralised by default.** Claude Code's `` !`cmd` `` placeholders
   and ` ```! ` blocks are executable. Converting *to* Claude Code from an agent that does not
   execute them never produces executable content that was not executable in the source:
-  the syntax is escaped and a warning is emitted, unless `--shell-injection=keep` is passed.
-  Converting *away* from Claude Code preserves the text and reports `degraded`, listing each
-  occurrence.
+  the syntax becomes a plain code span, reported as `adapted`, unless `--shell-injection=keep`
+  is passed (reported as `degraded`) or `strip` (reported as `dropped`). Converting *away* from
+  Claude Code preserves the text and reports `degraded`, listing each occurrence.
+- **Claude Code has two surfaces and only one is a target.** Local `.claude/skills` directories
+  accept every field; uploading to claude.ai / the Skills API / `package_skill.py` accepts only
+  `name`, `description`, `license`, `compatibility`, `metadata` and `allowed-tools` and
+  hard-errors on anything else. `convert` targets the local directory form. The upload form
+  needs its own profile and is not implemented yet.
 - **Unverified behaviours.** Codex's name grammar, OpenCode and Kimi Code symlink handling,
   Kimi Code's `license`/`compatibility`/`metadata`/`allowed-tools` support, and the flow body
   format are all `unknown`. The converter warns rather than assumes.
@@ -229,7 +302,7 @@ silence is the enemy.
 | 0.5 | Research + profiles for OpenCode and Kimi Code CLI | done |
 | 1a | IR, schema, parsers, `inspect`, `agents`, CI on 3 OSes | done |
 | 1b | `lint --for <agent>` with rule IDs, severities and source URLs | done |
-| 1c | `convert`, conversion report, install with backup | next |
+| 1c | `convert`, conversion report, install with backup | done |
 | 1d | Fixtures with attribution, golden/round-trip/security tests, CONTRIBUTING | planned |
 | 2 | More Agent Skills agents via profiles (Cursor, Gemini CLI, Copilot, Zed, ZCode, Cline, Roo, Windsurf, Deep Agents) | planned |
 | 3 | Non-`SKILL.md` formats (`AGENTS.md`, Cursor rules, Gemini commands, legacy Claude commands) | planned |
@@ -239,11 +312,12 @@ silence is the enemy.
 
 ```
 agents/            capability profiles, one YAML per agent (data, not code)
-schema/            JSON Schema for capability profiles, the IR and the lint report
+schema/            JSON Schema for capability profiles, the IR, the lint and conversion reports
 docs/research.md   verified per-agent facts with source URLs and retrieval dates
 docs/lint-rules.md generated rule catalogue; edit the code, not the document
 docs/adr/          architecture decision records
 fixtures/lint/     skills that each exercise one lint rule
+fixtures/golden/   committed conversion output, compared byte-for-byte by the tests
 scripts/           repository tooling
 tests/             test suite
 packages/          core, cli (Phase 1)

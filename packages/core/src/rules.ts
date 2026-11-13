@@ -157,7 +157,7 @@ export const LINT_RULES: readonly LintRule[] = [
     code: 'IDENTITY_DERIVED',
     derivedFrom: 'identity.source, identity.displayNameFrom',
     derivation: 'profile',
-    severityPolicy: 'warning when the two identities differ, info when they agree or the fallback is lossless',
+    severityPolicy: 'warning only when the two identities differ; silent when they agree, info under --verbose',
     fix: 'Keep the directory name, the filename and the frontmatter name in agreement so the skill is addressable by the same string everywhere.',
     description:
       'Covers the fallback case the brief calls out: a target whose identity.source is `path` addresses the skill by its location and treats frontmatter name as a label, so renaming the directory renames the skill.',
@@ -300,7 +300,7 @@ export const LINT_RULES: readonly LintRule[] = [
     derivedFrom: 'bodyExecution.shellInjection.executed, bodyExecution.shellInjection.syntaxes',
     derivation: 'profile',
     severityPolicy:
-      'error when the source agent did not execute it, warning when it did, warning when the source behaviour is unknown',
+      'error when a verified source agent did not execute it, warning when it did, warning when either behaviour is unknown (including an assumed source)',
     fix: 'Remove the placeholder, or keep it deliberately. Nothing is executed by skillporter; the target will execute it.',
     description:
       'One finding per occurrence, with the line number, so the author can look at the exact command. Whether this is new behaviour is decided by comparing the source profile with the target profile, which is why both are read.',
@@ -315,7 +315,7 @@ export const LINT_RULES: readonly LintRule[] = [
     derivedFrom: 'bodyExecution.shellInjection.executed',
     derivation: 'profile',
     severityPolicy:
-      'warning when the source agent executed it, info when neither agent executes it, warning when either behaviour is unknown',
+      'warning when the source agent executed it or either behaviour is unknown, info when neither executes it; never depends on an assumed source',
     fix: 'Replace the placeholder with the text it produced in the source agent, or keep it as documentation and say so.',
     description:
       'The mirror of SP016. A placeholder that used to expand becomes literal text, which changes what the model reads even though the file is unchanged.',

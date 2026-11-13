@@ -79,7 +79,7 @@ warning rather than an error, because the project reports gaps instead of guessi
 | ID | Rule | Slug | Derived from | Code | Severity |
 | --- | --- | --- | --- | --- | --- |
 | `SP004` | Target requires an identity and the skill has none | `name-required` | `identity.requiredInDirectoryForm, identity.requiredInFlatForm` | `MISSING_REQUIRED_FIELD` | always error |
-| `SP005` | Target takes the identity from somewhere other than where the skill keeps it | `identity-source` | `identity.source, identity.displayNameFrom` | `IDENTITY_DERIVED` | warning when the two identities differ, info when they agree or the fallback is lossless |
+| `SP005` | Target takes the identity from somewhere other than where the skill keeps it | `identity-source` | `identity.source, identity.displayNameFrom` | `IDENTITY_DERIVED` | warning only when the two identities differ; silent when they agree, info under --verbose |
 
 - **SP004** — Read per layout: a directory skill consults requiredInDirectoryForm, a flat .md skill consults requiredInFlatForm. Undefined means the profile does not say, and the rule stays silent rather than guess.
   Fix: Add a name to the frontmatter. Deriving one from the path is what the target does silently when it is allowed to; here it is not allowed.
@@ -138,8 +138,8 @@ warning rather than an error, because the project reports gaps instead of guessi
 
 | ID | Rule | Slug | Derived from | Code | Severity |
 | --- | --- | --- | --- | --- | --- |
-| `SP016` | Target executes shell syntax found in the body | `shell-injection-executed` | `bodyExecution.shellInjection.executed, bodyExecution.shellInjection.syntaxes` | `SHELL_INJECTION` | error when the source agent did not execute it, warning when it did, warning when the source behaviour is unknown |
-| `SP017` | Body contains shell syntax the target will not execute | `shell-injection-inert` | `bodyExecution.shellInjection.executed` | `SHELL_INJECTION` | warning when the source agent executed it, info when neither agent executes it, warning when either behaviour is unknown |
+| `SP016` | Target executes shell syntax found in the body | `shell-injection-executed` | `bodyExecution.shellInjection.executed, bodyExecution.shellInjection.syntaxes` | `SHELL_INJECTION` | error when a verified source agent did not execute it, warning when it did, warning when either behaviour is unknown (including an assumed source) |
+| `SP017` | Body contains shell syntax the target will not execute | `shell-injection-inert` | `bodyExecution.shellInjection.executed` | `SHELL_INJECTION` | warning when the source agent executed it or either behaviour is unknown, info when neither executes it; never depends on an assumed source |
 
 - **SP016** — One finding per occurrence, with the line number, so the author can look at the exact command. Whether this is new behaviour is decided by comparing the source profile with the target profile, which is why both are read.
   Fix: Remove the placeholder, or keep it deliberately. Nothing is executed by skillporter; the target will execute it.

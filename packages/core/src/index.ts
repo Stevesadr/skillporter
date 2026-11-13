@@ -60,3 +60,39 @@ export type { LintRule, RuleArea, RuleDerivation } from './rules.js';
 
 export { caseCollisions, exitCodeForSummary, lintSkill } from './lint.js';
 export type { LintOptions, LintResult, LintSummary } from './lint.js';
+
+export { convertSkill } from './convert/index.js';
+export type { ConvertOptions } from './convert/index.js';
+export { applyShellPolicy, planBody } from './convert/body.js';
+export type { BodyPlan, BodyPlanOptions, ShellPolicy } from './convert/body.js';
+export { emitField, emitScalar, isFrontmatterKey, planFields, targetKeyFor, triggeredExtensions } from './convert/frontmatter.js';
+export type { FieldPlan, FieldPlanOptions, TargetKey } from './convert/frontmatter.js';
+export { directoryNameFor, planConversion } from './convert/plan.js';
+export type { PlannedFile, PlannedSkill, PlanOptions } from './convert/plan.js';
+export { planSharedConversion } from './convert/lcd.js';
+export type { SharedPlanOptions } from './convert/lcd.js';
+export {
+  ConversionError,
+  exitCodeForConversion,
+  summarise,
+  summariseReport,
+} from './convert/report.js';
+export type {
+  ConversionItem,
+  ConversionReport,
+  ConversionSubject,
+  ConvertedFileReport,
+  Fidelity,
+  FidelitySummary,
+  OverlapReport,
+  RootReport,
+  TargetReport,
+} from './convert/report.js';
+export { assignRoots, defaultRootContext, primaryRoot, resolveDocumentedPath, rootsFor } from './convert/roots.js';
+export type { ResolvedRoot, RootAssignment, RootContext, Scope } from './convert/roots.js';
+
+export { writeSkill, writeSkillToOutput } from './install.js';
+export type { FileToWrite, WriteSkillOptions, WriteSkillResult } from './install.js';
+
+export { assertSafeArchiveEntry, extractZip, isZipPath } from './archive.js';
+export type { ExtractedSkill } from './archive.js';

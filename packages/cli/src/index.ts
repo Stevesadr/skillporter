@@ -2,15 +2,20 @@
 import { Command, Option } from 'commander';
 import {
   AmbiguousSourceError,
+  ConversionError,
   ProfileError,
   SkillParseError,
+  convertSkill,
+  exitCodeForConversion,
   exitCodeForSummary,
   lintSkill,
   loadProfiles,
   parseSkill,
+  type ShellPolicy,
   type ToolLimits,
 } from '@skillporter/core';
 import { renderAgents, renderInspect, renderLint } from './format.js';
+import { renderConvert, renderConvertMarkdown } from './convert-format.js';
 
 const program = new Command();
 
@@ -73,6 +78,7 @@ limitOptions(
     .addOption(new Option('--format <format>', 'output format').choices(['text', 'json']).default('text'))
     .option('--json', 'alias for --format json')
     .option('--ignore-unknown', 'suppress UNKNOWN_CAPABILITY findings')
+    .option('--verbose', 'also show informational findings that only restate a non-problem')
     .action(async (target: string, options: Record<string, unknown>) => {
       try {
         const result = await lintSkill({
@@ -80,6 +86,7 @@ limitOptions(
           for: String(options.for),
           ...(typeof options.from === 'string' ? { from: options.from } : {}),
           ...(options.ignoreUnknown === true ? { ignoreUnknown: true } : {}),
+          ...(options.verbose === true ? { verbose: true } : {}),
           limits: limitsFrom(options),
         });
 
@@ -92,6 +99,59 @@ limitOptions(
         process.exitCode = exitCodeForSummary(result.summary);
       } catch (error) {
         reportError(error, 'lint');
+      }
+    }),
+);
+
+limitOptions(
+  program
+    .command('convert <path>')
+    .description('convert a skill to one or more agent formats and report exactly what changed')
+    .requiredOption('--to <agents>', 'target agents, comma separated')
+    .option('--from <agent>', 'source agent; inferred from the location when omitted')
+    .option('--out <dir>', 'write the converted skill under this directory')
+    .option('--install', 'write into the target agents own skill directories')
+    .option('--global', 'with --install: use the user-level skill directories')
+    .option('--project', 'with --install: use the project skill directories (default)')
+    .option('--dry-run', 'write nothing; print the plan and the report')
+    .option('--strict', 'treat degraded and dropped items as an error')
+    .option('--force', 'replace an existing skill without asking')
+    .addOption(
+      new Option('--shell-injection <policy>', 'what to do when the target would execute syntax the source did not')
+        .choices(['neutralize', 'keep', 'strip'])
+        .default('neutralize'),
+    )
+    .addOption(new Option('--report <format>', 'report format').choices(['text', 'json', 'md']).default('text'))
+    .option('--json', 'alias for --report json')
+    .action(async (target: string, options: Record<string, unknown>) => {
+      try {
+        const to = String(options.to)
+          .split(',')
+          .map((id) => id.trim())
+          .filter((id) => id.length > 0);
+
+        const report = await convertSkill({
+          path: target,
+          to,
+          ...(typeof options.from === 'string' ? { from: options.from } : {}),
+          ...(typeof options.out === 'string' ? { out: options.out } : {}),
+          ...(options.install === true ? { install: true } : {}),
+          ...(options.global === true ? { scope: 'global' as const } : {}),
+          ...(options.dryRun === true ? { dryRun: true } : {}),
+          ...(options.strict === true ? { strict: true } : {}),
+          ...(options.force === true ? { force: true } : {}),
+          shellPolicy: options.shellInjection as ShellPolicy,
+          limits: limitsFrom(options),
+        });
+
+        const format = options.json === true ? 'json' : String(options.report);
+        if (format === 'json') process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+        else if (format === 'md') process.stdout.write(`${renderConvertMarkdown(report)}\n`);
+        else process.stdout.write(`${renderConvert(report)}\n`);
+
+        process.exitCode = exitCodeForConversion(report, options.strict === true);
+      } catch (error) {
+        reportError(error, 'convert');
       }
     }),
 );

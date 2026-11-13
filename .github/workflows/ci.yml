@@ -77,6 +77,52 @@ jobs:
           node -e "const r = JSON.parse(require('node:fs').readFileSync(process.argv[1], 'utf8')); if (!Array.isArray(r.findings)) throw new Error('lint JSON has no findings array');" "$out/lint.json"
           rm -rf "$out"
 
+      - name: Smoke test convert
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$(mktemp -d)"
+
+          # A skill with nothing to lose converts cleanly and exits 0.
+          node packages/cli/dist/index.js convert fixtures/skills/simple-prompt \
+            --from claude-code --to codex-cli,deepseek-harness,kimi-code,opencode,claude-code \
+            --out "$out/clean" > /dev/null
+          echo "clean conversion: exit 0"
+
+          # One with losses exits 2, which is a documented result rather than a
+          # crash, so the code is checked explicitly.
+          set +e
+          node packages/cli/dist/index.js convert fixtures/skills/report-builder \
+            --from codex-cli --to claude-code --out "$out/lossy" --report json > "$out/report.json" 2> "$out/report.err"
+          lossy=$?
+          node packages/cli/dist/index.js convert fixtures/skills/report-builder \
+            --from codex-cli --to claude-code --out "$out/strict" --strict > /dev/null 2>&1
+          strict=$?
+          set -e
+
+          echo "convert: lossy=$lossy strict=$strict"
+          [ "$lossy" = "2" ] || { echo "expected 2 for a conversion with losses, got $lossy" >&2; exit 1; }
+          [ "$strict" = "1" ] || { echo "expected 1 under --strict, got $strict" >&2; exit 1; }
+
+          node -e "
+            const r = JSON.parse(require('node:fs').readFileSync(process.argv[1], 'utf8'));
+            if (!Array.isArray(r.targets) || r.targets.length !== 1) throw new Error('report has no target');
+            const t = r.targets[0];
+            if (!Array.isArray(t.items)) throw new Error('report has no items');
+            if (!t.lint || !t.lint.summary) throw new Error('report has no post-conversion lint');
+            if (r.summary.result !== 'degraded') throw new Error('expected a degraded result');
+            console.log('report: ' + r.summary.preserved + ' preserved, ' + r.summary.degraded + ' degraded');
+          " "$out/report.json"
+
+          # Neutralizing must not leave executable syntax behind for the target.
+          if grep -qF '!`' "$out/lossy/report-builder/SKILL.md"; then
+            echo "an inline shell placeholder survived into claude-code" >&2
+            exit 1
+          fi
+          echo "no executable placeholder in the claude-code output"
+
+          rm -rf "$out"
+
       - name: Check the documented exit codes
         shell: bash
         run: |

@@ -1,0 +1,191 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://skillporter.dev/schema/conversion-report.schema.json",
+  "title": "skillporter conversion report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["tool", "source", "targets", "roots", "overlaps", "notes", "mode", "dryRun", "summary"],
+  "properties": {
+    "tool": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "type": "string" },
+        "version": { "type": "string" }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "input", "agent", "explicit", "assumed", "detection", "identity", "layout"],
+      "properties": {
+        "path": { "type": "string" },
+        "input": { "enum": ["directory", "flat", "zip"] },
+        "agent": { "type": "string" },
+        "explicit": { "type": "boolean" },
+        "assumed": { "type": "boolean" },
+        "detection": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["agent", "candidates", "alsoReadBy", "ambiguous", "reason", "matchedRoot"],
+          "properties": {
+            "agent": { "type": ["string", "null"] },
+            "candidates": { "type": "array", "items": { "type": "string" } },
+            "alsoReadBy": { "type": "array", "items": { "type": "string" } },
+            "ambiguous": { "type": "boolean" },
+            "reason": { "type": "string" },
+            "matchedRoot": { "type": ["string", "null"] }
+          }
+        },
+        "identity": { "type": "string" },
+        "layout": { "enum": ["directory", "flat"] }
+      }
+    },
+    "mode": { "enum": ["install", "out"] },
+    "dryRun": { "type": "boolean" },
+    "targets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["target", "displayName", "verification", "layout", "directoryName", "destination", "written", "items", "files", "lint", "summary"],
+        "properties": {
+          "target": { "type": "string" },
+          "displayName": { "type": "string" },
+          "verification": { "type": "string" },
+          "layout": { "enum": ["directory", "flat"] },
+          "directoryName": { "type": "string" },
+          "destination": { "type": "string" },
+          "written": { "type": "boolean" },
+          "skipped": { "type": "string" },
+          "items": { "type": "array", "items": { "$ref": "#/$defs/item" } },
+          "files": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["path", "bytes", "mode", "fidelity"],
+              "properties": {
+                "path": { "type": "string" },
+                "bytes": { "type": "integer", "minimum": 0 },
+                "mode": { "type": "string" },
+                "fidelity": { "$ref": "#/$defs/fidelity" },
+                "reason": { "type": "string" }
+              }
+            }
+          },
+          "lint": {
+            "oneOf": [
+              { "type": "null" },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["findings", "summary"],
+                "properties": {
+                  "findings": { "type": "array", "items": { "$ref": "#/$defs/finding" } },
+                  "summary": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["errors", "warnings", "info", "suppressed", "result"],
+                    "properties": {
+                      "errors": { "type": "integer", "minimum": 0 },
+                      "warnings": { "type": "integer", "minimum": 0 },
+                      "info": { "type": "integer", "minimum": 0 },
+                      "suppressed": { "type": "integer", "minimum": 0 },
+                      "result": { "enum": ["clean", "warning", "error"] }
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "summary": { "$ref": "#/$defs/summary" }
+        }
+      }
+    },
+    "roots": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "suffix", "scope", "targets", "action"],
+        "properties": {
+          "path": { "type": "string" },
+          "suffix": { "type": "string" },
+          "scope": { "enum": ["project", "global"] },
+          "targets": { "type": "array", "items": { "type": "string" } },
+          "action": { "enum": ["write", "shared", "overlap-skipped", "dry-run"] },
+          "backup": { "type": "string" },
+          "note": { "type": "string" }
+        }
+      }
+    },
+    "overlaps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["target", "root", "writtenFor", "precedence"],
+        "properties": {
+          "target": { "type": "string" },
+          "root": { "type": "string" },
+          "writtenFor": { "type": "string" },
+          "precedence": { "type": "string" }
+        }
+      }
+    },
+    "notes": { "type": "array", "items": { "type": "string" } },
+    "summary": { "$ref": "#/$defs/summary" }
+  },
+  "$defs": {
+    "fidelity": { "enum": ["preserved", "adapted", "renamed", "degraded", "dropped"] },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["preserved", "adapted", "renamed", "degraded", "dropped", "result"],
+      "properties": {
+        "preserved": { "type": "integer", "minimum": 0 },
+        "adapted": { "type": "integer", "minimum": 0 },
+        "renamed": { "type": "integer", "minimum": 0 },
+        "degraded": { "type": "integer", "minimum": 0 },
+        "dropped": { "type": "integer", "minimum": 0 },
+        "result": { "enum": ["clean", "degraded"] }
+      }
+    },
+    "item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["subject", "kind", "fidelity", "reason"],
+      "properties": {
+        "subject": { "type": "string", "minLength": 1 },
+        "kind": {
+          "enum": ["identity", "layout", "field", "body", "shell-injection", "file", "extension"]
+        },
+        "fidelity": { "$ref": "#/$defs/fidelity" },
+        "reason": { "type": "string", "minLength": 1 },
+        "source": { "type": "string" },
+        "line": { "type": "integer", "minimum": 1 },
+        "detail": { "type": "object" }
+      }
+    },
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "severity", "message"],
+      "properties": {
+        "code": { "type": "string" },
+        "severity": { "enum": ["error", "warning", "info"] },
+        "message": { "type": "string" },
+        "ruleId": { "type": "string" },
+        "file": { "type": "string" },
+        "line": { "type": "integer", "minimum": 1 },
+        "column": { "type": "integer", "minimum": 1 },
+        "hint": { "type": "string" },
+        "fix": { "type": "string" },
+        "source": { "type": "string" },
+        "detail": { "type": "object" }
+      }
+    }
+  }
+}
