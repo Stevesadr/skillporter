@@ -77,6 +77,12 @@ export interface FieldPlanOptions {
    * dropped with the caller's reason.
    */
   allow?: { keys: ReadonlySet<string>; reason: (key: string) => string };
+  /**
+   * Set when the identity had to change to satisfy the target's name rule. The
+   * name item then says so, instead of blaming the source for a label change
+   * the target's grammar forced.
+   */
+  nameRuleReason?: string;
 }
 
 export interface FieldPlan {
@@ -112,7 +118,10 @@ export function planFields(options: FieldPlanOptions): FieldPlan {
       subject: 'field:name',
       kind: 'field',
       fidelity: 'adapted',
-      reason: 'the skill had no name in frontmatter, so the identity it was addressed by was written out explicitly',
+      reason:
+        options.nameRuleReason === undefined
+          ? 'the skill had no name in frontmatter, so the identity it was addressed by was written out explicitly'
+          : `the skill had no name in frontmatter and the identity did not satisfy ${target.id}'s name rule, so "${identityName}" was written`,
       ...(sourceUrl === undefined ? {} : { source: sourceUrl }),
     });
   } else if (sourceName.value !== identityName) {
@@ -120,7 +129,9 @@ export function planFields(options: FieldPlanOptions): FieldPlan {
       subject: 'field:name',
       kind: 'field',
       fidelity: 'adapted',
-      reason: `the source kept "${String(sourceName.value)}" as a display label and was addressed as "${identityName}"; the target addresses a skill by its name, so the identity was written out and the label is not carried`,
+      reason:
+        options.nameRuleReason ??
+        `the source kept "${String(sourceName.value)}" as a display label and was addressed as "${identityName}"; the target addresses a skill by its name, so the identity was written out and the label is not carried`,
       line: sourceName.line,
       ...(sourceUrl === undefined ? {} : { source: sourceUrl }),
       detail: { from: sourceName.value, to: identityName },

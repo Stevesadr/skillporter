@@ -4,7 +4,7 @@ import type { SkillIR } from '../ir.js';
 import type { AgentProfile } from '../profile.js';
 import { applyShellPolicy, type ShellPolicy } from './body.js';
 import { isFrontmatterKey, planFields, targetKeyFor, triggeredExtensions } from './frontmatter.js';
-import { directoryNameFor, type PlannedFile, type PlannedSkill } from './plan.js';
+import { planIdentity, type PlannedFile, type PlannedSkill } from './plan.js';
 import { summarise, type ConversionItem, type Fidelity } from './report.js';
 
 export interface SharedPlanOptions {
@@ -65,7 +65,10 @@ export async function planSharedConversion(options: SharedPlanOptions): Promise<
   const groupNote = `${targets.length} targets share one root: ${targets.map((target) => target.id).join(', ')}`;
   const sourceUrl = first.sources[0]?.url;
 
-  const directory = directoryNameFor(ir.identity.name);
+  // One copy has to be addressable by every target in the group, so the name is
+  // normalised against all of their rules, not just the first one's.
+  const namePlan = planIdentity(ir.identity.name, targets);
+  const directory = { name: namePlan.name, changed: namePlan.directoryChanged };
   if (directory.changed) {
     items.push({
       subject: 'identity:directory',
@@ -114,6 +117,11 @@ export async function planSharedConversion(options: SharedPlanOptions): Promise<
     target: first,
     identityName: directory.name,
     extensionFields,
+    ...(namePlan.ruleChanged
+      ? {
+          nameRuleReason: `"${ir.identity.name}" does not satisfy every target's documented name rule, so the shared copy was written as "${directory.name}"`,
+        }
+      : {}),
     allow: {
       keys: allowed,
       reason: (key) =>
@@ -216,6 +224,6 @@ export async function planSharedConversion(options: SharedPlanOptions): Promise<
     files,
     items,
     summary: summarise(items),
-    renamed: directory.changed,
+    renamed: namePlan.name !== ir.identity.name,
   };
 }

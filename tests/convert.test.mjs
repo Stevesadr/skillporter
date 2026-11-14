@@ -1029,3 +1029,41 @@ test('cli: --out and --install together is refused', async (t) => {
   assert.equal(result.code, 1);
   assert.match(result.stderr, /one of them/);
 });
+
+test('name: an identity that breaks the target grammar is normalised and reported once', async (t) => {
+  const dir = await sandbox(t);
+  const source = join(dir, 'spacey');
+  await mkdir(source, { recursive: true });
+  await writeFile(
+    join(source, 'SKILL.md'),
+    '---\nname: Changelog Writer\ndescription: Turns merged pull requests into release notes.\n---\n\n# Notes\n\nWrite them.\n',
+  );
+
+  const out = join(dir, 'out');
+  const report = await convert({ path: source, from: 'claude-code', to: ['deepseek-harness'], out });
+  const target = targetOf(report, 'deepseek-harness');
+
+  // dsh drops a skill whose name is not kebab-case without an error, so writing
+  // the source name through would produce a skill that never appears in its
+  // catalog. Normalising is what makes the conversion usable.
+  assert.equal(target.directoryName, 'changelog-writer');
+  const written = await read(join(out, 'changelog-writer', 'SKILL.md'));
+  assert.match(written, /^name: changelog-writer$/m);
+
+  const nameItems = target.items.filter((item) => item.subject === 'field:name');
+  assert.equal(nameItems.length, 1, 'one change must be reported once, not once per mechanism');
+  assert.equal(nameItems[0].fidelity, 'adapted');
+  assert.match(nameItems[0].reason, /name rule/);
+  assert.equal(nameItems[0].detail?.from, 'Changelog Writer');
+
+  assert.equal(exitCodeForConversion(report, false), 0, 'a rename is not a loss');
+});
+
+test('name: a name that already satisfies the target is not touched', async (t) => {
+  const out = join(await sandbox(t), 'out');
+  const report = await convert({ path: resolve(ROOT, SIMPLE), from: 'claude-code', to: ['deepseek-harness'], out });
+  const target = targetOf(report, 'deepseek-harness');
+  assert.equal(target.directoryName, 'changelog-writer');
+  const nameItems = target.items.filter((item) => item.subject === 'field:name');
+  assert.equal(nameItems[0].fidelity, 'preserved');
+});
