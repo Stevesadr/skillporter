@@ -13,7 +13,7 @@
     "dist"
   ],
   "dependencies": {
-    "@skillporter/core": "*",
+    "@skillporter/core": "^0.1.0",
     "commander": "^12.1.0"
   }
 }
