@@ -667,30 +667,39 @@ and `sessionStart.skill`. Plugin skills use the same `SKILL.md` format and are a
 the fully qualified name `<plugin-id>:<skill-name>`. `sessionStart.skill` injects one plugin
 skill's text into the main agent at session start; it injects text only and executes nothing.
 
-### 8.9 Documentation conflict: `name`, `description` and `/flow:`
+### 8.9 Former documentation conflict: `name`, `description` and `/flow:`
 
-Two sets of Kimi Code documentation disagree, and the disagreement is not cosmetic.
+Two sets of Kimi Code documentation once disagreed, and the disagreement was not cosmetic.
+It closed itself on 2026-11-15 when the contradicting page was withdrawn.
 
 | Claim | Source | Status |
 | --- | --- | --- |
 | `name` and `description` are mandatory for a directory skill; omitting either fails to parse | <https://www.kimi.com/code/docs/kimi-code-cli/customization/skills.html> | **verified** — stated in the frontmatter table and restated in the warning box below it |
-| `name` falls back to the directory name; both fields are optional | <https://www.kimi.com/en/help/features/use-skills-in-code> | **located, still contradicted** — see note below |
-| Flow skills are invoked as `/flow:<name>` | Kimi help-centre guidance | **contradicted** by the slash-commands reference |
+| `name` falls back to the directory name; both fields are optional | help-centre article `use-skills-in-code` | **withdrawn** — the article no longer resolves; its successor defers to the reference. See note below |
+| Flow skills are invoked as `/flow:<name>` | the same help-centre article | **withdrawn** — never supported by any live page |
 | Flow skills are invoked as `/skill:<name>`; there is no `/flow:` namespace | <https://www.kimi.com/code/docs/kimi-code-cli/reference/slash-commands.html> | **verified** — stated explicitly in the Skill 动态命令 section |
 | `--skills-dir` **replaces** the auto-discovered roots | <https://www.kimi.com/code/docs/kimi-code-cli/reference/kimi-command.html> | **verified** |
 
-**Note on the second source.** The help-centre article was supplied by the project owner on
-2026-11-12 as <https://www.kimi.com/en/help/features/use-skills-in-code>. Earlier attempts to
-locate it failed because the help centre at `kimi.com/zh-cn/help/` serves a JavaScript search
-shell that returns HTTP 200 for every path, including nonexistent ones, so a probe cannot
-distinguish a real article from a 404 page. The URL is recorded here as the source of the
-"optional with a directory-name fallback" reading.
+**Note on the withdrawn source.** The project owner supplied a help-centre article on
+2026-11-12 at <https://www.kimi.com/en/help/features/use-skills-in-code> as the origin of the
+"optional with a directory-name fallback" reading and of the `/flow:` invocation. Earlier
+attempts to locate it failed because the help centre serves a JavaScript search shell that
+returns HTTP 200 for every path, including nonexistent ones, so a probe cannot distinguish a
+real article from a 404 page.
 
-Having the URL does not resolve the conflict: the two pages are both first-party and they
-still disagree. The resolution below therefore does not depend on which one is right — it
-picks the behaviour that is correct under either reading.
+On 2026-11-15 that URL returned the help centre's "Sorry, no relevant results" page. The help
+centre has been restructured, and the article is gone. Its successor under *Kimi Code → CLI ·
+Agent Skills* (<https://www.kimi.com/en/help/kimi-code/cli-skills>) is now a stub that reads
+"The Kimi Code team maintains the detailed guide for this topic. Visit the documentation site
+for the latest instructions." — it makes no claim of its own. The general Skills article
+(<https://www.kimi.com/en/help/plugins-and-skills/what-are-skills>) describes Skills in the
+Kimi app rather than in the CLI, and its `SKILL.md` template lists `name` and `description` as
+the frontmatter fields with no fallback.
 
-**How this is handled, given the conflict:**
+So no live first-party page now contradicts the reference documentation on either point. The
+defensive reading is kept regardless: it costs nothing, and a withdrawn source can come back.
+
+**How this is handled:**
 
 1. The capability profile keeps the reference documentation's reading: `name` and
    `description` are required in the directory form. That is the behaviour that costs the
@@ -704,7 +713,8 @@ picks the behaviour that is correct under either reading.
    a flow skill is `/skill:<name>`, so emitting `/flow:` would produce a command the agent
    does not recognise. `type: flow` is preserved as a field, and the invocation surface is
    left to Kimi.
-4. `docs/research.md` §11 carries this as an open item until one side is confirmed.
+4. `docs/research.md` §11 keeps the two questions in the table for the record, marked as
+   settled by withdrawal rather than left open.
 
 ---
 
@@ -829,8 +839,8 @@ agents share is the trigger text, and each spells it differently.
 | Kimi Code symlink handling | `followsSymlinks` is `null`; no doc statement found |
 | Kimi Code `license`, `compatibility`, `metadata`, `allowed-tools` | Not documented in the skills reference |
 | Kimi Code flow body format (Mermaid / D2) | The claim is absent from every official page checked; treated as `UNVERIFIED` |
-| Kimi Code: are `name` and `description` really mandatory? | Reference docs say yes; the help-centre article at <https://www.kimi.com/en/help/features/use-skills-in-code> says no. §8.9 records the conflict; the profile keeps the reference reading and the emitter writes both fields either way |
-| Kimi Code: does a `/flow:` invocation exist? | Reference docs say no such namespace; the `/flow:` claim could not be traced. The tool never emits it |
+| Kimi Code: are `name` and `description` really mandatory? | Settled. Reference docs say yes; the help-centre article that said no has been withdrawn and its successor defers to the reference. The profile keeps the reference reading and the emitter writes both fields either way. See §8.9 |
+| Kimi Code: does a `/flow:` invocation exist? | Settled. The slash-commands reference states there is no `/flow:` namespace, and the page that claimed one is gone. The tool never emits it |
 | Whether Kimi Code enforces a description length for an explicit description | Only the 240-char flat-form fallback is documented |
 
 Phase 2 agents (Cursor, Gemini CLI, GitHub Copilot, Zed, ZCode, Cline, Roo Code, Windsurf,
@@ -858,4 +868,13 @@ docs first.
 | 12 | <https://www.kimi.com/code/docs/kimi-code-cli/reference/slash-commands.html> | 2026-11-12 | Kimi invocation syntax; verified no `/flow:` namespace |
 | 13 | <https://www.kimi.com/code/docs/kimi-code-cli/reference/kimi-command.html> | 2026-11-12 | Verified `--skills-dir` replaces rather than adds |
 | 14 | <https://www.kimi.com/code/docs/kimi-code-cli/customization/plugins.html> | 2026-11-12 | `kimi.plugin.json`, qualified names, `sessionStart.skill` |
-| 15 | <https://www.kimi.com/en/help/features/use-skills-in-code> | 2026-11-12 | Help-centre article; source of the "`name`/`description` optional" reading, contradicted by #11 |
+| 15 | ~~<https://www.kimi.com/en/help/features/use-skills-in-code>~~ | 2026-11-12 | **Withdrawn.** Returned "no relevant results" on 2026-11-15. Was the source of the "`name`/`description` optional" and `/flow:` readings; both are now unsupported. See §8.9 |
+| 16 | <https://www.kimi.com/en/help/kimi-code/cli-skills> | 2026-11-15 | Successor to #15; now a stub that defers to #11 |
+| 17 | <https://www.kimi.com/en/help/plugins-and-skills/what-are-skills> | 2026-11-15 | Kimi app Skills (not the CLI); `SKILL.md` template shows `name` and `description` only |
+
+Rows 1–14 and 16–17 were all re-fetched on 2026-11-15 and still resolve to the pages cited.
+Rows 2 and 8 were not re-checked and keep their original date. No claim in rows 1–14 changed;
+the Codex page now states its duplicate-name rule in so many words, which §6.1 already records.
+
+The `retrieved:` field in `agents/*.yaml` carries the same date and means "last fetched and
+checked", not "first found".

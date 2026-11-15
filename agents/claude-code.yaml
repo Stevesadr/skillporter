@@ -228,12 +228,12 @@ extensions:
 
 sources:
   - url: https://agentskills.io/specification
-    retrieved: 2026-11-12
+    retrieved: 2026-11-15
     note: Base format, field constraints, progressive disclosure.
     covers:
       - format
   - url: https://code.claude.com/docs/en/skills
-    retrieved: 2026-11-12
+    retrieved: 2026-11-15
     note: Scopes, precedence, full frontmatter reference, substitutions, extensions.
     covers:
       - paths

@@ -165,7 +165,7 @@ extensions:
 
 sources:
   - url: https://developers.openai.com/codex/skills
-    retrieved: 2026-11-12
+    retrieved: 2026-11-15
     note: Paths and scopes, context budget, agents/openai.yaml, [[skills.config]].
     covers:
       - paths
@@ -176,7 +176,7 @@ sources:
       - fields
       - bodyExecution
   - url: https://agentskills.io/specification
-    retrieved: 2026-11-12
+    retrieved: 2026-11-15
     note: Base format and field constraints.
     covers:
       - format

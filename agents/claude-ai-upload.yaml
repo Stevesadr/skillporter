@@ -139,7 +139,7 @@ fields:
 
 sources:
   - url: https://platform.claude.com/docs/en/build-with-claude/skills-guide
-    retrieved: 2026-11-14
+    retrieved: 2026-11-15
     note: >-
       Upload methods, the bundle layout, the requirement list that names exactly
       `name` and `description` with their constraints, the 30 MB bound, and the
@@ -153,7 +153,7 @@ sources:
       - description
       - fields
   - url: https://docs.claude.com/en/docs/agents-and-tools/agent-skills/overview
-    retrieved: 2026-11-14
+    retrieved: 2026-11-15
     note: >-
       The two required fields and their constraints, that custom skills do not
       sync across surfaces, and the runtime a skill executes in.
@@ -164,7 +164,7 @@ sources:
       - description
       - bodyExecution
   - url: https://agentskills.io/specification
-    retrieved: 2026-11-14
+    retrieved: 2026-11-15
     note: >-
       Defines license, compatibility, metadata and allowed-tools. Cited so the
       report can say where those fields come from when it reports dropping them.

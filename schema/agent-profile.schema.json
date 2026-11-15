@@ -330,12 +330,14 @@
     },
     "source": {
       "type": "object",
+      "description": "A first-party page the profile's claims rest on. Re-fetch and re-date on every refresh.",
       "additionalProperties": false,
       "required": ["url", "retrieved"],
       "properties": {
         "url": { "type": "string", "pattern": "^https?://" },
         "retrieved": {
           "type": "string",
+          "description": "Date the URL was last fetched and its content checked against the claims below.",
           "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
         },
         "covers": {

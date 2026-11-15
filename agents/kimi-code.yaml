@@ -12,13 +12,13 @@ notes: >-
   at the skills root (both optional, with fallbacks). Verified against the
   Chinese-language official documentation at kimi.com/code/docs; the CLI itself
   is TypeScript on Node 22.19+.
-  DOCUMENTATION CONFLICT: the help-centre article
-  https://www.kimi.com/en/help/features/use-skills-in-code says name and
-  description are optional with a directory-name fallback, and that flow skills run
-  as /flow:<name>. The reference documentation says the opposite on both points, and
-  only the reference documentation is verified. See docs/research.md section 8.9.
-  The emitter must always write name and description for this target, and must never
-  generate a /flow: command.
+  FORMER DOCUMENTATION CONFLICT, NOW CLOSED: a help-centre article once said name and
+  description were optional with a directory-name fallback, and that flow skills run
+  as /flow:<name>. That article has been withdrawn and its successor defers to the
+  reference documentation on every CLI skill question, so the disagreement no longer
+  exists and the reference reading stands unchallenged. See docs/research.md section
+  8.9. The emitter must always write name and description for this target, and must
+  never generate a /flow: command.
 
 paths:
   project:
@@ -208,7 +208,7 @@ extensions:
 
 sources:
   - url: https://www.kimi.com/code/docs/kimi-code-cli/customization/skills.html
-    retrieved: 2026-11-12
+    retrieved: 2026-11-15
     note: Skill forms, name derivation, frontmatter table, placeholders, storage locations, precedence, invocation, nesting limit.
     covers:
       - format
@@ -219,26 +219,33 @@ sources:
       - fields
       - bodyExecution
   - url: https://www.kimi.com/code/docs/kimi-code-cli/reference/slash-commands.html
-    retrieved: 2026-11-12
+    retrieved: 2026-11-15
     note: >-
       Verified that flow skills use /skill:<name> and that no /flow: namespace
       exists.
   - url: https://www.kimi.com/code/docs/kimi-code-cli/reference/kimi-command.html
-    retrieved: 2026-11-12
+    retrieved: 2026-11-15
     note: Verified that --skills-dir replaces auto-discovered directories and is repeatable.
     covers:
       - paths
   - url: https://www.kimi.com/code/docs/kimi-code-cli/customization/plugins.html
-    retrieved: 2026-11-12
+    retrieved: 2026-11-15
     note: kimi.plugin.json, plugin-qualified skill names, sessionStart.skill.
     covers:
       - paths
-  - url: https://www.kimi.com/en/help/features/use-skills-in-code
-    retrieved: 2026-11-12
+  - url: https://www.kimi.com/en/help/kimi-code/cli-skills
+    retrieved: 2026-11-15
     note: >-
-      Help-centre article that says name and description are optional with a
-      directory-name fallback. Contradicts the reference documentation; recorded
-      but not used as the basis for any rule. See docs/research.md section 8.9.
+      Successor to the withdrawn use-skills-in-code article, which no longer
+      resolves. The page is now a stub that sends CLI skill questions to the
+      reference documentation, so it makes no claim of its own.
+  - url: https://www.kimi.com/en/help/plugins-and-skills/what-are-skills
+    retrieved: 2026-11-15
+    note: >-
+      Consumer-facing article about Skills in the Kimi app rather than the CLI.
+      Its SKILL.md template lists name and description as the frontmatter fields
+      with no directory-name fallback, so it does not support the withdrawn
+      "optional" reading.
   - url: https://agentskills.io/specification
-    retrieved: 2026-11-12
+    retrieved: 2026-11-15
     note: Base format for comparison.
