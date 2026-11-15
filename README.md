@@ -2,9 +2,13 @@
 
 Convert AI agent skills between agent formats — and get an honest report of what changed.
 
-> **Status: Phase 1c complete.** The IR, the parsers for all five agents, `inspect`, `agents`,
-> `lint` and `convert` are working and tested on Linux, macOS and Windows. The package is not
-> published yet. See [Roadmap](#roadmap).
+> **Status: alpha. Experimental, pre-1.0.** The IR, the parsers, `inspect`, `agents`, `lint`
+> and `convert` work and are tested on Linux, macOS and Windows, but nothing here is frozen:
+> the command surface, the report format and the lint rule ids may all change before 1.0,
+> and a change to a capability profile can make a conversion report differently without any
+> code changing. Do not build a pipeline that depends on exit code 2 without pinning a
+> version. The package is not published yet. See [Honest limitations](#honest-limitations)
+> for what is not known, and [Roadmap](#roadmap) for what is planned.
 
 ## Commands
 
@@ -27,22 +31,32 @@ report-builder  ·  fixtures/skills/report-builder
 
   origin       Claude Code (claude-code, agent-skills, directory layout)
   identity     report-builder  [from frontmatter]
+  text         line endings LF  ·  BOM no
   body         1.1 KB  ·  sha256 ef70c8ccd3ef
   frontmatter  4 field(s)
+  …
 
   fields
     name           string   honoured
+    description    string   honoured
     allowed-tools  string   honoured
     x-acme-owner   string   unknown (line 5)
 
+  …
+
   shell syntax found: 2 occurrence(s), none executed
     line 23  inline-bang  git rev-parse --short HEAD
-    line 27  fenced-bang  python scripts/build_report.py --input sample.csv
+    line 27  fenced-bang  python scripts/build_report.py --input sample.csv --out /tmp
 
   diagnostics  0 error(s), 3 warning(s), 0 info
   warning UNKNOWN_CAPABILITY      SKILL.md:5      field "x-acme-owner" is not understood by claude-code; preserved verbatim
   warning SHELL_INJECTION         SKILL.md:23     claude-code executes this placeholder before the body is loaded
+  …
 ```
+
+Lines elided above are marked `…`; nothing is reordered or reworded. The full output also
+lists the description, how the source was detected, every bundled file with its size and
+mode, and the tool limits in force.
 
 ### Why `--from` is sometimes required
 
@@ -84,7 +98,7 @@ report-builder  ·  fixtures/skills/report-builder
           hint: skillporter has no verified answer for this field and will not guess. The field is preserved verbatim.
           fix:  Check the target documentation, then record the answer in the capability profile rather than in this skill.
           see:  https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/skill/skill-filesystem/src/index.ts
-  warning SP017  SKILL.md        DeepSeek Harness (dsh) does not execute shell syntax in the body; 2 occurrence(s) will appear as literal text
+  warning SP017  SKILL.md        DeepSeek Harness (dsh) does not execute shell syntax in the body; 2 occurrence(s) will appear as literal text, and the source agent executed it
           hint: These placeholders expanded in the source agent. Here they are text the model reads, which changes the prompt.
           fix:  Replace the placeholder with the text it produced in the source agent, or keep it as documentation and say so.
           see:  https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/subsystems/skills.md
@@ -111,7 +125,7 @@ Exit codes: `0` clean or informational only, `1` at least one error, `2` warning
 
 Every rule reads the target capability profile. There is no `if (agent === 'codex-cli')`
 anywhere in the engine: adding an agent brings its rules with it. The test suite proves this
-by writing a synthetic profile to a temporary directory and asserting that a dozen rules fire
+by writing a synthetic profile to a temporary directory and asserting that ten rules fire
 for an agent the codebase has never heard of.
 
 ### Tool limits
@@ -280,10 +294,11 @@ silence is the enemy.
   reports `type` as `degraded` with an explicit warning, and never invents a `flow` type on
   the way in.
 - **Precedence differs per agent, so a shared directory is not a shared meaning.** In
-  `.agents/skills`, `dsh` ranks project over user, Codex merges duplicates rather than
-  resolving them, OpenCode lets the later source silently override, and Kimi Code keeps
-  same-name skills as variants. The report names the rule that decides a duplicate name for
-  each target.
+  `.agents/skills`, `dsh` gives project roots a lower rank number than user roots, so project
+  wins; Codex does **not** merge duplicate names at all — both skills stay visible in the
+  selector; OpenCode lets the later-registered source supply the skill; and Kimi Code keeps
+  same-name skills from different configured directories as variants you pick between. The
+  report names the rule that decides a duplicate name for each target.
 - **Body adaptation is rules-based only.** Known tool names and syntax are mapped from a
   data table. Anything not in the table is flagged, never guessed. An optional LLM-assisted
   mode is planned but will be off by default and require an explicit flag.
@@ -303,9 +318,22 @@ silence is the enemy.
   official source, that they are accepted, the profile changes in one file — see
   [CONTRIBUTING.md](CONTRIBUTING.md). `convert --install` refuses this target, because an
   uploaded bundle has no discovery root to install into; `--out` writes the folder to upload.
-- **Unverified behaviours.** Codex's name grammar, OpenCode and Kimi Code symlink handling,
-  Kimi Code's `license`/`compatibility`/`metadata`/`allowed-tools` support, and the flow body
-  format are all `unknown`. The converter warns rather than assumes.
+- **What is `unknown`, in full.** Nothing is ever inferred. These facts are undocumented and
+  are reported as warnings rather than filled in:
+  - **Codex CLI** — its name grammar, and whether it honours `license`, `compatibility`,
+    `metadata` or `allowed-tools`.
+  - **OpenCode** — whether it honours `allowed-tools`, and whether it follows symlinks.
+  - **Kimi Code** — whether it honours `license`, `compatibility`, `metadata` or
+    `allowed-tools`, and whether it follows symlinks.
+  - **The upload form** — the same four fields, plus its symlink handling.
+  - **Everyone** — the maximum description length is undocumented for every agent except the
+    upload form; what *is* documented is a display truncation, which is a different thing and
+    is reported as such.
+
+  `--ignore-unknown` suppresses only these findings. [`docs/agents.md`](docs/agents.md) is
+  generated from the profiles, so it lists every gap and cannot drift from the data.
+- **The flow body format is not documented at all** for Kimi Code, so a Mermaid or D2
+  requirement cannot be relied on and is not invented.
 - **`dsh` is in developer preview** and promises breaking changes. Its filesystem
   discovery is the most stable part; the profiles are pinned to a retrieval date.
 
@@ -341,6 +369,7 @@ docs/agents.md     generated supported-agents matrix; edit the profiles, not the
 docs/research.md   verified per-agent facts with source URLs and retrieval dates
 docs/lint-rules.md generated rule catalogue; edit the code, not the document
 docs/adr/          architecture decision records
+RELEASING.md       the manual release procedure; nothing publishes automatically
 fixtures/          test inputs; fixtures/README.md records their provenance and licence
 fixtures/lint/     skills that each exercise one lint rule
 fixtures/golden/   committed conversion output, compared byte-for-byte by the tests

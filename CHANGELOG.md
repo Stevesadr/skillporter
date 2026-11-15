@@ -11,7 +11,11 @@ may start failing on exit code 2.
 
 ## [Unreleased]
 
-Nothing has been published yet. This entry describes the first release.
+**Alpha, pre-1.0.** Nothing has been published yet, and this entry describes the first
+release. Until 1.0 the command surface, the JSON report format and the lint rule ids may
+change without a major-version bump, and a capability-profile correction can change how a
+skill is reported without any code changing. Pin an exact version if a pipeline depends on
+the exit code.
 
 ### Added
 
@@ -57,7 +61,7 @@ Nothing has been published yet. This entry describes the first release.
 - `convert --install` now lints the skill where it was installed, not only in staging, so
   a collision with an existing skill in the same root is reported.
 - `--version` reads the package manifest instead of a hard-coded string.
-- The published tarballs carry `agents/` and `schema/`; without them an installed CLI
+- The packed tarballs carry `agents/` and `schema/`; without them an installed CLI
   could not load a single profile.
 
 ### Security
