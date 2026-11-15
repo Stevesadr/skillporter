@@ -1,10 +1,33 @@
 {
   "name": "skillporter",
   "version": "0.1.0",
-  "private": true,
-  "description": "Convert AI agent skills between agent formats with an explicit fidelity report.",
+  "description": "Convert AI agent skills between agent formats, with an explicit fidelity report for everything that is lost.",
   "license": "Apache-2.0",
+  "author": "Stevesadr (https://github.com/Stevesadr)",
+  "homepage": "https://github.com/Stevesadr/skillporter#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Stevesadr/skillporter.git",
+    "directory": "packages/cli"
+  },
+  "bugs": {
+    "url": "https://github.com/Stevesadr/skillporter/issues"
+  },
+  "keywords": [
+    "agent-skills",
+    "skill",
+    "SKILL.md",
+    "claude-code",
+    "codex-cli",
+    "opencode",
+    "converter",
+    "cli",
+    "migration"
+  ],
   "type": "module",
+  "engines": {
+    "node": ">=22.20.0"
+  },
   "bin": {
     "skillporter": "./dist/index.js"
   },
@@ -12,6 +35,9 @@
   "files": [
     "dist"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "dependencies": {
     "@skillporter/core": "^0.1.0",
     "commander": "^12.1.0"
