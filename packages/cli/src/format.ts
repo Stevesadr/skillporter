@@ -123,8 +123,14 @@ export function renderAgents(profiles: readonly AgentProfile[]): string {
 
     const project = profile.paths.project.map((entry) => entry.path).join(', ');
     const global = profile.paths.global.map((entry) => entry.path).join(', ');
-    lines.push(`  ${pad('project', 9)} ${project}`);
-    lines.push(`  ${pad('global', 9)} ${global}`);
+    if ((profile.delivery ?? 'directory') === 'archive') {
+      // An empty "project" line would read as missing data. It is not missing:
+      // this target has no directory to scan, and the report should say that.
+      lines.push(`  ${pad('delivery', 9)} uploaded bundle · no discovery root, nothing to install into`);
+    } else {
+      lines.push(`  ${pad('project', 9)} ${project}`);
+      lines.push(`  ${pad('global', 9)} ${global}`);
+    }
 
     const discovery = profile.discovery;
     const symlinks = discovery.followsSymlinks === null ? 'unknown' : discovery.followsSymlinks ? 'yes' : 'no';

@@ -24,6 +24,12 @@ export interface ProfileField {
   mapsTo?: string | null;
   note?: string;
   source?: string;
+  /**
+   * Set when the field must be dropped even though its status is `unknown`.
+   * Used where the target's acceptance of the field is undocumented and
+   * emitting it would be a guess rather than a fact.
+   */
+  dropReason?: string;
 }
 
 export interface ProfileExtension {
@@ -39,6 +45,10 @@ export interface AgentProfile {
   id: string;
   displayName: string;
   format: 'agent-skills' | 'proprietary';
+  /** `archive` means the agent is fed a bundle, not a discovery root. */
+  delivery?: 'directory' | 'archive';
+  /** `drop` means a field the profile does not describe is removed, not emitted. */
+  unknownFields?: 'emit' | 'drop';
   verification: 'verified' | 'partial' | 'unverified';
   notes?: string;
   paths: { project: PathEntry[]; global: PathEntry[] };
@@ -70,6 +80,8 @@ export interface AgentProfile {
     pattern: string | null;
     maxLength: number | null;
     mustMatchDirectory: boolean | null;
+    /** Substrings a name may not contain, e.g. an agent's own product names. */
+    reserved?: string[];
     enforcement: Enforcement;
     note?: string;
   };
@@ -102,6 +114,11 @@ let cached: AgentProfile[] | null = null;
 /**
  * Find `agents/`. Works from `packages/core/dist` by walking up, and can be
  * overridden for tests and for a future bundled layout.
+ *
+ * The innermost match wins. In an installed tarball that is the package's own
+ * copy, which `prepack` places beside `dist/`. In a repository checkout the
+ * copy only exists while a tarball is being built, because `postpack` removes
+ * it again; the rest of the time the walk reaches the real `agents/`.
  */
 export function resolveAgentsDir(startDir?: string): string {
   const override = process.env[AGENTS_DIR_ENV];

@@ -18,8 +18,11 @@
     "validate:profiles": "node scripts/validate-profiles.mjs",
     "rules": "node scripts/generate-rule-catalog.mjs",
     "rules:check": "node scripts/generate-rule-catalog.mjs --check",
+    "agents:docs": "node scripts/generate-agent-matrix.mjs",
+    "agents:docs:check": "node scripts/generate-agent-matrix.mjs --check",
     "test": "npm run build && node --test tests/*.test.mjs",
     "test:only": "node --test tests/*.test.mjs",
+    "check:package": "node scripts/check-package.mjs",
     "inspect": "node packages/cli/dist/index.js inspect",
     "lint": "node packages/cli/dist/index.js lint"
   },

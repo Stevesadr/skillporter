@@ -300,10 +300,10 @@ export const LINT_RULES: readonly LintRule[] = [
     derivedFrom: 'bodyExecution.shellInjection.executed, bodyExecution.shellInjection.syntaxes',
     derivation: 'profile',
     severityPolicy:
-      'error when a verified source agent did not execute it, warning when it did, warning when either behaviour is unknown (including an assumed source)',
+      'error when a verified source agent did not execute it, info when it did (the body is then copied unchanged, so nothing is new), warning when either behaviour is unknown (including an assumed source)',
     fix: 'Remove the placeholder, or keep it deliberately. Nothing is executed by skillporter; the target will execute it.',
     description:
-      'One finding per occurrence, with the line number, so the author can look at the exact command. Whether this is new behaviour is decided by comparing the source profile with the target profile, which is why both are read.',
+      'One finding per occurrence, with the line number, so the author can look at the exact command. Whether this is new behaviour is decided by comparing the source profile with the target profile, which is why both are read. When both sides execute, planBody leaves the text byte-for-byte identical, so the finding only states the status quo.',
   },
   {
     id: 'SP017',
@@ -411,6 +411,19 @@ export const LINT_RULES: readonly LintRule[] = [
     fix: 'Add or repair the frontmatter block. skillporter will not guess what an unparseable document meant.',
     description:
       'Absent frontmatter is only fatal where the target needs it. A target that falls back to the path can still load a skill with no frontmatter, so the same fact produces a different severity per profile.',
+  },
+  {
+    id: 'SP025',
+    slug: 'name-reserved-word',
+    title: 'Name contains a word the target reserves',
+    area: 'name',
+    code: 'FIELD_INVALID',
+    derivedFrom: 'name.reserved',
+    derivation: 'profile',
+    severityPolicy: 'always error: the target refuses the skill outright, and no rename can be guessed for the author',
+    fix: 'Rename the skill. A reserved word cannot be dropped from a name without inventing a different identity for someone else.',
+    description:
+      'Profile-driven and separate from SP001 because a reserved word is not a grammar violation: the name is perfectly well formed, it just belongs to the vendor. The converter does not rewrite it, because any replacement it chose would be a name the author did not pick.',
   },
 ];
 

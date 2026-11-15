@@ -48,16 +48,33 @@ export function emitScalar(value: string): string {
 }
 
 /**
+ * Emit a whole `key: value` field, correctly indented for any value.
+ *
+ * `emitScalar` is only safe for a single-line value: the YAML serialiser emits a
+ * multi-line string as a block scalar with no indentation, because at the
+ * document root there is nothing to indent it under. Concatenating that after
+ * `key: ` produces YAML that does not parse. Serialising an object with the key
+ * already in it makes the serialiser do the indenting.
+ */
+export function emitScalarField(key: string, value: string): string {
+  return stringifyYaml({ [key]: value }, { lineWidth: 0 }).replace(/\n$/, '');
+}
+
+/**
  * Re-emit a source field under a new key.
  *
  * The raw YAML is reused whenever the key is unchanged, which is what keeps
  * block scalars, quoting and flow style byte-identical. Renaming rewrites only
  * the key token, so the value keeps its original formatting.
+ *
+ * The trailing line break is removed because the caller joins fields with one:
+ * a block scalar's raw text ends with a newline, and keeping it would insert a
+ * blank line between every multi-line field.
  */
 export function emitField(field: IRFrontmatterField, outKey: string): string {
-  if (outKey === field.key) return field.raw;
-  if (field.raw.startsWith(field.key)) return `${outKey}${field.raw.slice(field.key.length)}`;
-  return `${outKey}: ${emitScalar(String(field.value ?? ''))}`;
+  if (outKey === field.key) return field.raw.replace(/[\r\n]+$/, '');
+  if (field.raw.startsWith(field.key)) return `${outKey}${field.raw.slice(field.key.length)}`.replace(/[\r\n]+$/, '');
+  return emitScalarField(outKey, String(field.value ?? ''));
 }
 
 function statusOf(target: AgentProfile, key: string): ProfileField | undefined {
@@ -111,8 +128,14 @@ export function planFields(options: FieldPlanOptions): FieldPlan {
 
   // ---- name ---------------------------------------------------------------
   // Always written. Every surveyed agent needs an identity in directory form,
-  // and two of them refuse to load a skill without one.
-  lines.push(`name: ${emitScalar(identityName)}`);
+  // and two of them refuse to load a skill without one. When the name is
+  // unchanged the source line is reused, so `name: "quoted"` stays quoted
+  // instead of being silently re-spelled as `name: quoted`.
+  lines.push(
+    sourceName !== undefined && String(sourceName.value) === identityName
+      ? emitField(sourceName, 'name')
+      : emitScalarField('name', identityName),
+  );
   if (sourceName === undefined) {
     items.push({
       subject: 'field:name',
@@ -151,7 +174,13 @@ export function planFields(options: FieldPlanOptions): FieldPlan {
   const descriptionRequired =
     (target.description.requiredInDirectoryForm ?? false) === true || (target.description.requiredInFlatForm ?? false) === true;
   if (ir.description !== '' || descriptionRequired) {
-    lines.push(`description: ${emitScalar(ir.description)}`);
+    // Same reasoning as the name: a description written as a block scalar must
+    // come back as a block scalar, not as a re-serialised single line.
+    lines.push(
+      sourceDescription !== undefined && String(sourceDescription.value ?? '') === ir.description
+        ? emitField(sourceDescription, 'description')
+        : emitScalarField('description', ir.description),
+    );
     if (sourceDescription === undefined) {
       items.push({
         subject: 'field:description',
@@ -213,6 +242,41 @@ export function planFields(options: FieldPlanOptions): FieldPlan {
         reason: `${target.id} has no equivalent for this field, so it was removed rather than emitted as noise`,
         line: field.line,
         ...(entry.note === undefined ? {} : { detail: { note: entry.note } }),
+        ...(sourceUrl === undefined ? {} : { source: sourceUrl }),
+      });
+      continue;
+    }
+
+    // A field the profile marks `unknown` is normally emitted verbatim and
+    // reported as degraded, because "not verified" is not the same as "not
+    // supported". A `dropReason` is the profile saying the opposite: emitting it
+    // would be a guess at a validation rule nobody published, so the field is
+    // dropped and the reason is the one the profile gives.
+    if (entry !== undefined && entry.dropReason !== undefined) {
+      items.push({
+        subject: `field:${field.key}`,
+        kind: 'field',
+        fidelity: 'dropped',
+        reason: entry.dropReason,
+        line: field.line,
+        ...(entry.note === undefined && entry.source === undefined
+          ? {}
+          : { detail: { ...(entry.note === undefined ? {} : { note: entry.note }), ...(entry.source === undefined ? {} : { fieldSource: entry.source }) } }),
+        ...(sourceUrl === undefined ? {} : { source: sourceUrl }),
+      });
+      continue;
+    }
+
+    // A profile that validates a closed set of keys cannot be handed a field it
+    // does not describe. `unknownFields: drop` is that target saying so, and the
+    // reason names the gap rather than claiming a rejection rule nobody wrote.
+    if (entry === undefined && target.unknownFields === 'drop') {
+      items.push({
+        subject: `field:${field.key}`,
+        kind: 'field',
+        fidelity: 'dropped',
+        reason: `${target.id}'s profile describes only the fields it accepts, so this one was dropped rather than emitted into a validation rule that is not documented`,
+        line: field.line,
         ...(sourceUrl === undefined ? {} : { source: sourceUrl }),
       });
       continue;

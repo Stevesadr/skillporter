@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { readFileSync } from 'node:fs';
 import { Command, Option } from 'commander';
 import {
   AmbiguousSourceError,
@@ -17,12 +18,28 @@ import {
 import { renderAgents, renderInspect, renderLint } from './format.js';
 import { renderConvert, renderConvertMarkdown } from './convert-format.js';
 
+/**
+ * Read the version from the manifest rather than writing it here.
+ *
+ * `dist/index.js` and `package.json` sit in the same package, so this resolves
+ * the same way from the source tree and from an installed tarball, and it
+ * cannot drift from the published version.
+ */
+function readVersion(): string {
+  try {
+    const manifest = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version?: string };
+    return manifest.version ?? '0.0.0';
+  } catch {
+    return '0.0.0';
+  }
+}
+
 const program = new Command();
 
 program
   .name('skillporter')
   .description('Convert AI agent skills between agent formats, with an explicit fidelity report.')
-  .version('0.0.0');
+  .version(readVersion());
 
 function limitOptions(command: Command): Command {
   return command

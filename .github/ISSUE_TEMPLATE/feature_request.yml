@@ -1,0 +1,43 @@
+name: Feature request
+description: Something the tool should do that it does not.
+title: "feat: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This project has one non-negotiable constraint: every conversion produces a report,
+        and the report never claims more than the tool can prove. A feature that would
+        require guessing at an agent's behaviour needs a profile change first.
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What are you trying to do, and where does the tool get in the way?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you would like it to do
+      description: The command line, the output, or the API you have in mind.
+    validations:
+      required: true
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Which part of the tool
+      options:
+        - A new agent (a capability profile)
+        - A new input format (AGENTS.md, rules files, a git URL)
+        - Conversion or fidelity reporting
+        - Linting
+        - The CLI or its output
+        - Something else
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What you tried instead
+      description: A workaround, another tool, or a script. Knowing this often changes the design.

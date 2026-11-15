@@ -8,7 +8,7 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import Ajv2020 from 'ajv/dist/2020.js';
 
-import { LINT_RULES, caseCollisions, clearProfileCache, lintSkill } from '../packages/core/dist/index.js';
+import { LINT_RULES, caseCollisions, clearProfileCache, exitCodeForSummary, lintSkill } from '../packages/core/dist/index.js';
 
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const CLI = join(ROOT, 'packages', 'cli', 'dist', 'index.js');
@@ -40,22 +40,23 @@ function has(result, ruleId) {
 // ---------------------------------------------------------------------------
 
 const RULE_CASES = [
-  { rule: 'SP001', fail: ['bad-name', 'deepseek-harness'], pass: ['simple-prompt', 'deepseek-harness'] },
-  { rule: 'SP004', fail: ['no-name', 'deepseek-harness'], pass: ['simple-prompt', 'deepseek-harness'] },
-  { rule: 'SP005', fail: ['deep/group/skill', 'opencode'], pass: ['simple-prompt', 'claude-code'] },
-  { rule: 'SP006', fail: ['no-description', 'deepseek-harness'], pass: ['simple-prompt', 'deepseek-harness'] },
-  { rule: 'SP008', fail: ['long-description', 'deepseek-harness'], pass: ['simple-prompt', 'deepseek-harness'] },
+  { rule: 'SP001', fail: ['bad-name', 'deepseek-harness'], pass: ['changelog-writer', 'deepseek-harness'] },
+  { rule: 'SP004', fail: ['no-name', 'deepseek-harness'], pass: ['changelog-writer', 'deepseek-harness'] },
+  { rule: 'SP005', fail: ['deep/group/skill', 'opencode'], pass: ['changelog-writer', 'claude-code'] },
+  { rule: 'SP006', fail: ['no-description', 'deepseek-harness'], pass: ['changelog-writer', 'deepseek-harness'] },
+  { rule: 'SP008', fail: ['long-description', 'deepseek-harness'], pass: ['changelog-writer', 'deepseek-harness'] },
   { rule: 'SP009', fail: ['flat-skill.md', 'codex-cli'], pass: ['flat-skill.md', 'deepseek-harness'] },
   { rule: 'SP010', fail: ['deep/group/skill', 'claude-code'], pass: ['deep/group/skill', 'opencode'] },
-  { rule: 'SP011', fail: ['ignored-fields', 'deepseek-harness'], pass: ['simple-prompt', 'deepseek-harness'] },
-  { rule: 'SP013', fail: ['report-builder', 'claude-code'], pass: ['simple-prompt', 'claude-code'] },
+  { rule: 'SP011', fail: ['ignored-fields', 'deepseek-harness'], pass: ['changelog-writer', 'deepseek-harness'] },
+  { rule: 'SP013', fail: ['report-builder', 'claude-code'], pass: ['changelog-writer', 'claude-code'] },
   { rule: 'SP014', fail: ['alias-spelling', 'claude-code'], pass: ['alias-spelling', 'deepseek-harness'] },
   { rule: 'SP015', fail: ['flow-release', 'kimi-code'], pass: ['flow-release', 'claude-code'] },
-  { rule: 'SP016', fail: ['report-builder', 'claude-code'], pass: ['simple-prompt', 'claude-code'] },
-  { rule: 'SP017', fail: ['report-builder', 'deepseek-harness'], pass: ['simple-prompt', 'deepseek-harness'] },
+  { rule: 'SP016', fail: ['report-builder', 'claude-code'], pass: ['changelog-writer', 'claude-code'] },
+  { rule: 'SP017', fail: ['report-builder', 'deepseek-harness'], pass: ['changelog-writer', 'deepseek-harness'] },
   { rule: 'SP021', fail: ['dup-one', 'deepseek-harness'], pass: ['bad-name', 'deepseek-harness'] },
   { rule: 'SP023', fail: ['report-builder', 'claude-code', { maxFiles: 1 }], pass: ['report-builder', 'claude-code'] },
-  { rule: 'SP024', fail: ['no-frontmatter', 'deepseek-harness'], pass: ['simple-prompt', 'deepseek-harness'] },
+  { rule: 'SP024', fail: ['no-frontmatter', 'deepseek-harness'], pass: ['changelog-writer', 'deepseek-harness'] },
+  { rule: 'SP025', fail: ['reserved-name', 'claude-ai-upload'], pass: ['reserved-name', 'claude-code'] },
 ];
 
 /** Resolve a short fixture name to a real path, preferring the lint fixtures. */
@@ -149,11 +150,25 @@ test('shell injection severity depends on whether the conversion introduces exec
     assert.match(item.message, /introduce execution|only displayed/);
   }
 
-  // Source and target both execute: unchanged behaviour, a warning.
+  // Source and target both execute: the body is copied byte-for-byte, so this
+  // is the status quo rather than news. It is stated as info, which by
+  // definition cannot change the exit code.
   const unchanged = await lint('fixtures/skills/report-builder', { for: 'claude-code', from: 'claude-code' });
-  for (const item of unchanged.findings.filter((entry) => entry.ruleId === 'SP016')) {
-    assert.equal(item.severity, 'warning');
+  const same = unchanged.findings.filter((entry) => entry.ruleId === 'SP016');
+  assert.equal(same.length, 2, 'still one finding per occurrence');
+  for (const item of same) {
+    assert.equal(item.severity, 'info');
+    assert.match(item.message, /not new behaviour/);
+    assert.equal(item.detail.textUnchanged, true);
   }
+  assert.equal(unchanged.summary.errors, 0);
+  // The only warning left comes from the fixture's deliberate unknown field
+  // (SP013). SP016 itself must contribute none, so it cannot move the exit code.
+  const unrelatedWarnings = unchanged.findings.filter(
+    (entry) => entry.ruleId !== 'SP016' && entry.severity === 'warning',
+  ).length;
+  assert.equal(unchanged.summary.warnings, unrelatedWarnings, 'an unchanged placeholder adds no warnings');
+  assert.equal(exitCodeForSummary(unchanged.summary), unrelatedWarnings > 0 ? 2 : 0);
 });
 
 // ---------------------------------------------------------------------------
@@ -289,7 +304,7 @@ test('lint --format json validates against schema/lint-report.schema.json', asyn
     [`${LINT_ROOT}/bad-name`, 'deepseek-harness'],
     [`${LINT_ROOT}/flat-skill.md`, 'codex-cli'],
     [`${LINT_ROOT}/alias-spelling`, 'claude-code'],
-    ['fixtures/skills/simple-prompt', 'opencode'],
+    ['fixtures/skills/changelog-writer', 'opencode'],
   ];
 
   for (const [path, target] of cases) {

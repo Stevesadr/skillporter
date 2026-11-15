@@ -7,14 +7,20 @@ import { join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { zipSync, strToU8 } from 'fflate';
 import Ajv2020 from 'ajv/dist/2020.js';
+import { parse as parseYaml } from 'yaml';
 
 import {
   applyShellPolicy,
   assertSafeArchiveEntry,
   convertSkill,
   exitCodeForConversion,
+  emitField,
+  emitScalarField,
+  extractZip,
   loadProfiles,
+  parseSkill,
   resolveDocumentedPath,
+  resolveLimits,
   rootsFor,
   writeSkill,
 } from '../packages/core/dist/index.js';
@@ -22,7 +28,7 @@ import {
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const CLI = join(ROOT, 'packages', 'cli', 'dist', 'index.js');
 const GOLDEN = 'fixtures/golden';
-const SIMPLE = 'fixtures/skills/simple-prompt';
+const SIMPLE = 'fixtures/skills/changelog-writer';
 const REPORT_BUILDER = 'fixtures/skills/report-builder';
 const FLOW = 'fixtures/skills/flow-release';
 const ALIAS = 'fixtures/lint/.agents/skills/alias-spelling';
@@ -137,11 +143,11 @@ function targetOf(report, id) {
 const GOLDEN_CASES = [
   // Class A: no shell syntax, no agent-specific fields -> identical everywhere.
   ...['codex-cli', 'deepseek-harness', 'kimi-code', 'opencode', 'claude-code'].map((agent) => ({
-    name: `simple-prompt -> ${agent}`,
+    name: `changelog-writer -> ${agent}`,
     path: SIMPLE,
     from: 'claude-code',
     to: agent,
-    golden: `${GOLDEN}/simple-prompt/${agent}/changelog-writer`,
+    golden: `${GOLDEN}/changelog-writer/${agent}/changelog-writer`,
   })),
   // Class B: non-executing source -> non-executing target. The body is copied
   // as text and each occurrence is reported as degraded, never rewritten.
@@ -160,6 +166,23 @@ const GOLDEN_CASES = [
     from: 'codex-cli',
     to: 'claude-code',
     golden: `${GOLDEN}/report-builder/claude-neutralized/report-builder`,
+  },
+  // Class D: a target that documents a closed field set. Everything except
+  // name and description is removed, and the output is a bundle to upload
+  // rather than a directory anything scans.
+  {
+    name: 'changelog-writer -> claude-ai-upload',
+    path: SIMPLE,
+    from: 'claude-code',
+    to: 'claude-ai-upload',
+    golden: `${GOLDEN}/changelog-writer/claude-ai-upload/changelog-writer`,
+  },
+  {
+    name: 'report-builder -> claude-ai-upload (fields dropped)',
+    path: REPORT_BUILDER,
+    from: 'claude-code',
+    to: 'claude-ai-upload',
+    golden: `${GOLDEN}/report-builder/claude-ai-upload/report-builder`,
   },
 ];
 
@@ -669,8 +692,16 @@ test('roots: a path that depends on how the agent was launched is not a candidat
     assert.equal(resolveDocumentedPath(documented, context, 'project'), null, `${documented} must not resolve`);
   }
 
-  // Every agent still has at least one real project root, so nothing is guessed.
+  // Every agent that reads a directory has at least one real project root, so
+  // nothing is guessed. An archive target is the documented exception: it has
+  // no discovery root at all, and inventing one would be exactly the guess this
+  // rule exists to prevent.
   for (const profile of await loadProfiles()) {
+    if ((profile.delivery ?? 'directory') === 'archive') {
+      assert.deepEqual(profile.paths.project, [], `${profile.id} is an archive target and must not name a project root`);
+      assert.deepEqual(profile.paths.global, [], `${profile.id} is an archive target and must not name a global root`);
+      continue;
+    }
     assert.ok(rootsFor(profile, 'project', context).length > 0, `${profile.id} has no resolvable project root`);
   }
 });
@@ -757,6 +788,54 @@ test('zip: a hostile entry name is refused before anything is written', () => {
   for (const name of ['SKILL.md', 'scripts/build_report.py', 'references/nested/checklist.md', './SKILL.md']) {
     assert.ok(assertSafeArchiveEntry(name).length > 0, `expected "${name}" to be accepted`);
   }
+});
+
+test('zip: a bomb is refused, and the reason is the expanded size', async (t) => {
+  const dir = await sandbox(t);
+  const zipPath = join(dir, 'bomb.zip');
+
+  // Ten megabytes of one character deflates to a few kilobytes, so the
+  // compressed file passes any check on the size of the input.
+  const payload = 'a'.repeat(10 * 1024 * 1024);
+  await writeFile(zipPath, Buffer.from(zipSync({ 'SKILL.md': strToU8(payload) })));
+  const onDisk = (await stat(zipPath)).size;
+  assert.ok(onDisk < 64 * 1024, `the bomb should be small on disk, got ${onDisk} bytes`);
+
+  // What this pins down is the refusal and its reason. The stronger property —
+  // that the ten megabytes are never allocated, because the limits are read
+  // from the central directory before fflate inflates anything — cannot be
+  // observed from outside without measuring the heap, which would be flaky.
+  await assert.rejects(
+    () => extractZip(zipPath, resolveLimits({ maxTotalBytes: 64 * 1024 })),
+    /expands past the tool limit/,
+  );
+});
+
+test('zip: too many entries is refused before extraction, and the count is the reason', async (t) => {
+  const dir = await sandbox(t);
+  const zipPath = join(dir, 'many.zip');
+  const entries = {};
+  for (let index = 0; index < 6; index += 1) entries[`file-${index}.md`] = strToU8(`# ${index}\n`);
+  await writeFile(zipPath, Buffer.from(zipSync(entries)));
+
+  await assert.rejects(
+    () => extractZip(zipPath, resolveLimits({ maxFiles: 3 })),
+    /holds more than 3 files/,
+  );
+});
+
+test('zip: a single entry over the per-file limit is refused, and named', async (t) => {
+  const dir = await sandbox(t);
+  const zipPath = join(dir, 'big-file.zip');
+  await writeFile(
+    zipPath,
+    Buffer.from(zipSync({ 'SKILL.md': strToU8('# small\n'), 'references/huge.md': strToU8('b'.repeat(200_000)) })),
+  );
+
+  await assert.rejects(
+    () => extractZip(zipPath, resolveLimits({ maxFileBytes: 1024, maxTotalBytes: 1024 * 1024 })),
+    /references\/huge\.md.*over the tool limit/,
+  );
 });
 
 test('zip: converting an archive never writes outside the extraction directory', async (t) => {
@@ -1066,4 +1145,276 @@ test('name: a name that already satisfies the target is not touched', async (t) 
   assert.equal(target.directoryName, 'changelog-writer');
   const nameItems = target.items.filter((item) => item.subject === 'field:name');
   assert.equal(nameItems[0].fidelity, 'preserved');
+});
+
+// ---------------------------------------------------------------------------
+// The upload target: a closed field set and no directory to install into.
+// ---------------------------------------------------------------------------
+
+test('upload: only the documented fields are emitted and every drop is reported', async (t) => {
+  const out = join(await sandbox(t), 'out');
+  const report = await convert({ path: resolve(ROOT, REPORT_BUILDER), from: 'claude-code', to: ['claude-ai-upload'], out });
+  const target = targetOf(report, 'claude-ai-upload');
+
+  const written = await read(join(out, 'report-builder', 'SKILL.md'));
+  const frontmatter = written.slice(0, written.indexOf('\n---', 4));
+  const keys = frontmatter
+    .split('\n')
+    .slice(1)
+    .map((line) => line.slice(0, line.indexOf(':')))
+    .sort();
+  assert.deepEqual(keys, ['description', 'name'], 'the upload surface documents exactly two fields');
+
+  const dropped = target.items.filter((item) => item.fidelity === 'dropped');
+  assert.deepEqual(
+    dropped.map((item) => item.subject).sort(),
+    ['field:allowed-tools', 'field:x-acme-owner'],
+    'both removed fields must be named',
+  );
+  for (const item of dropped) {
+    assert.match(item.reason, /not documented|not .*published/, `the drop must say why: ${item.reason}`);
+    assert.ok(item.source, 'a drop must cite the profile source');
+  }
+
+  // The body is untouched: the target does not execute shell syntax, so
+  // rewriting it would change the prompt for nothing.
+  assert.ok(written.includes('!`'), 'the shell syntax is inert here and must survive as text');
+  const shell = target.items.filter((item) => item.kind === 'shell-injection');
+  assert.equal(shell.length, 2);
+  for (const item of shell) assert.equal(item.fidelity, 'degraded');
+
+  assert.ok(report.notes.some((note) => note.includes('zip and upload')), 'the report must say how to use the output');
+});
+
+test('upload: a reserved word is an error, and the name is not invented for the author', async (t) => {
+  const dir = await sandbox(t);
+  const source = join(dir, 'claude-helper');
+  await mkdir(source, { recursive: true });
+  await writeFile(join(source, 'SKILL.md'), '---\nname: claude-helper\ndescription: Helps with questions.\n---\n\nBody.\n');
+
+  const out = join(dir, 'out');
+  const report = await convert({ path: source, from: 'claude-code', to: ['claude-ai-upload'], out });
+  const target = targetOf(report, 'claude-ai-upload');
+
+  // The name is well formed, so it is not rewritten; the target simply refuses
+  // it, and the report says so instead of producing an upload that will fail.
+  assert.equal(target.directoryName, 'claude-helper');
+  const error = target.lint.findings.find((finding) => finding.ruleId === 'SP025');
+  assert.ok(error, 'a reserved word must be reported');
+  assert.equal(error.severity, 'error');
+  assert.match(error.message, /reserves/);
+  assert.equal(exitCodeForConversion(report, false), 1, 'an output the target refuses is an error, not a loss');
+});
+
+test('upload: an over-long description is an error rather than a silent truncation', async (t) => {
+  const dir = await sandbox(t);
+  const source = join(dir, 'long-desc');
+  await mkdir(source, { recursive: true });
+  await writeFile(
+    join(source, 'SKILL.md'),
+    `---\nname: long-desc\ndescription: ${'x'.repeat(1200)}\n---\n\nBody.\n`,
+  );
+
+  const report = await convert({ path: source, from: 'claude-code', to: ['claude-ai-upload'], out: join(dir, 'out') });
+  const target = targetOf(report, 'claude-ai-upload');
+
+  assert.equal(target.items.find((item) => item.subject === 'field:description').fidelity, 'preserved');
+  const error = target.lint.findings.find((finding) => finding.ruleId === 'SP007');
+  assert.ok(error, 'the hard bound must be reported');
+  assert.equal(error.severity, 'error');
+  assert.equal(exitCodeForConversion(report, false), 1);
+});
+
+test('upload: --install is refused, because there is no root to install into', async (t) => {
+  const project = await sandbox(t);
+  await assert.rejects(
+    () =>
+      convert({
+        path: resolve(ROOT, REPORT_BUILDER),
+        from: 'claude-code',
+        to: ['claude-ai-upload'],
+        install: true,
+        projectRoot: project,
+        home: project,
+      }),
+    (error) => {
+      assert.match(error.message, /uploaded bundle/);
+      assert.match(error.message, /--out/);
+      return true;
+    },
+  );
+});
+
+test('install: lint runs at the destination, so a duplicate name is found', async (t) => {
+  const project = await sandbox(t);
+  // A skill that already claims the name, under a directory called something
+  // else. Only a scan of the real root can see it.
+  await mkdir(join(project, '.dsh', 'skills', 'notes'), { recursive: true });
+  await writeFile(
+    join(project, '.dsh', 'skills', 'notes', 'SKILL.md'),
+    '---\nname: changelog-writer\ndescription: An older skill that already claims this name.\n---\n\nOld body.\n',
+  );
+
+  const report = await convert({
+    path: resolve(ROOT, SIMPLE),
+    from: 'claude-code',
+    to: ['deepseek-harness'],
+    install: true,
+    projectRoot: project,
+    home: project,
+  });
+  const target = targetOf(report, 'deepseek-harness');
+
+  const duplicate = target.lint.findings.find((finding) => finding.ruleId === 'SP021');
+  assert.ok(duplicate, 'a duplicate in the destination root must be found');
+  assert.match(duplicate.message, /notes/, 'the finding must name the other skill');
+  assert.ok(
+    report.notes.some((note) => note.includes('installed destination')),
+    'the report must say the destination was checked',
+  );
+
+  // --dry-run writes nothing, so it must not claim to have checked a location.
+  const dry = await convert({
+    path: resolve(ROOT, SIMPLE),
+    from: 'claude-code',
+    to: ['deepseek-harness'],
+    install: true,
+    dryRun: true,
+    projectRoot: project,
+    home: project,
+  });
+  assert.equal(
+    dry.targets[0].lint.findings.some((finding) => finding.ruleId === 'SP021'),
+    false,
+    'a dry run cannot find a duplicate it never created',
+  );
+  assert.ok(dry.notes.some((note) => note.includes('could not be checked')));
+});
+
+// ---------------------------------------------------------------------------
+// Round trips: A -> B -> A.
+//
+// The claim under test is the one the whole tool rests on. If the report says a
+// field was `preserved`, the bytes must come back identical after a detour
+// through another agent. If a field does not come back, the report must have
+// said so on the way out or on the way back. Either half failing means the
+// report lied, which is worse than a lossy conversion.
+// ---------------------------------------------------------------------------
+
+/** The fidelity reported for each frontmatter field, per hop. */
+function fieldFidelities(targets) {
+  const seen = new Map();
+  for (const target of targets) {
+    for (const item of target.items) {
+      if (!item.subject.startsWith('field:')) continue;
+      const key = item.subject.slice('field:'.length);
+      seen.set(key, [...(seen.get(key) ?? []), item.fidelity]);
+    }
+  }
+  return seen;
+}
+
+const ROUND_TRIPS = [
+  { path: 'fixtures/skills/report-builder', a: 'claude-code', b: 'codex-cli' },
+  { path: 'fixtures/skills/report-builder', a: 'claude-code', b: 'deepseek-harness' },
+  { path: 'fixtures/skills/quoting-demo', a: 'claude-code', b: 'codex-cli' },
+  { path: 'fixtures/skills/quoting-demo', a: 'codex-cli', b: 'kimi-code' },
+  { path: 'fixtures/skills/changelog-writer', a: 'claude-code', b: 'opencode' },
+  { path: 'fixtures/skills/changelog-writer', a: 'deepseek-harness', b: 'claude-ai-upload' },
+];
+
+for (const trip of ROUND_TRIPS) {
+  test(`round trip: ${trip.a} -> ${trip.b} -> ${trip.a} keeps what it calls preserved`, async (t) => {
+    const base = await sandbox(t);
+    const source = resolve(ROOT, trip.path);
+
+    const out1 = join(base, 'hop1');
+    const first = await convert({ path: source, from: trip.a, to: [trip.b], out: out1 });
+    const dir1 = join(out1, first.targets[0].directoryName);
+
+    const out2 = join(base, 'hop2');
+    const second = await convert({ path: dir1, from: trip.b, to: [trip.a], out: out2 });
+    const dir2 = join(out2, second.targets[0].directoryName);
+
+    const before = await parseSkill({ path: source, from: trip.a });
+    const after = await parseSkill({ path: dir2, from: trip.a });
+    assert.deepEqual(
+      after.ir.diagnostics.filter((item) => item.code === 'FRONTMATTER_INVALID'),
+      [],
+      'the round-tripped frontmatter must still be valid YAML',
+    );
+
+    const beforeFields = new Map(before.ir.frontmatter.fields.map((field) => [field.key, field]));
+    const afterFields = new Map(after.ir.frontmatter.fields.map((field) => [field.key, field]));
+    const fidelities = fieldFidelities([first.targets[0], second.targets[0]]);
+
+    for (const [key, original] of beforeFields) {
+      const reported = fidelities.get(key) ?? [];
+      const survivor = afterFields.get(key);
+
+      if (survivor === undefined) {
+        assert.ok(
+          reported.some((fidelity) => fidelity === 'dropped' || fidelity === 'degraded'),
+          `"${key}" did not survive ${trip.a} -> ${trip.b} -> ${trip.a} but was reported as ${JSON.stringify(reported)}`,
+        );
+        continue;
+      }
+
+      if (reported.length > 0 && reported.every((fidelity) => fidelity === 'preserved')) {
+        assert.equal(
+          survivor.raw,
+          original.raw,
+          `"${key}" was reported preserved on both hops but came back different`,
+        );
+      }
+    }
+
+    // Nothing may be invented on the way round.
+    for (const key of afterFields.keys()) {
+      if (beforeFields.has(key)) continue;
+      assert.ok(fidelities.has(key), `"${key}" appeared out of nowhere and was not reported`);
+    }
+
+    // The body is byte-exact whenever both hops said it was untouched.
+    const bodyUntouched = [first.targets[0], second.targets[0]].every(
+      (target) =>
+        target.items.filter((item) => item.kind === 'body').every((item) => item.fidelity === 'preserved') &&
+        target.items.filter((item) => item.kind === 'shell-injection').every((item) => item.fidelity === 'preserved'),
+    );
+    if (bodyUntouched) {
+      assert.equal(after.ir.body, before.ir.body, 'the body was reported untouched but changed');
+    }
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Frontmatter emission. Found by the quoting-demo fixture: a block scalar was
+// re-emitted through the scalar serialiser, which indents nothing at the
+// document root, so `description: |` was followed by unindented lines and the
+// whole frontmatter stopped parsing. Reported as "preserved" the whole time.
+// ---------------------------------------------------------------------------
+
+test('emit: a multi-line value is indented under its key', () => {
+  const value = 'First paragraph.\n\nSecond paragraph.';
+  const line = emitScalarField('description', value);
+
+  assert.ok(line.startsWith('description: |'), `expected a block scalar, got ${JSON.stringify(line)}`);
+  const body = line.split('\n').slice(1);
+  for (const entry of body) {
+    assert.ok(entry === '' || entry.startsWith('  '), `a block line must be indented: ${JSON.stringify(entry)}`);
+  }
+  // The property that matters: the emitted field parses back to the same value.
+  // Parsed without a fence, because `---` starts a document rather than closing one.
+  assert.equal(parseYaml(line).description, value);
+});
+
+test('emit: a source field keeps its raw text and loses only its trailing newline', () => {
+  const raw = 'description: |\n  One.\n\n  Two.\n';
+  const field = { key: 'description', raw, value: 'One.\n\nTwo.\n', line: 2 };
+
+  assert.equal(emitField(field, 'description'), 'description: |\n  One.\n\n  Two.');
+  // A rename rewrites only the key token.
+  assert.equal(emitField(field, 'summary'), 'summary: |\n  One.\n\n  Two.');
+  // No trailing newline survives, because the caller joins fields with one.
+  assert.ok(!emitField(field, 'description').endsWith('\n'));
 });

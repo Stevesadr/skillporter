@@ -23,7 +23,7 @@ async function tempSkill(files) {
 
 test('parses a simple directory skill', async () => {
   const { ir, detection } = await parseSkill({
-    path: join(FIXTURES, 'skills/simple-prompt'),
+    path: join(FIXTURES, 'skills/changelog-writer'),
     from: 'claude-code',
   });
 
@@ -40,7 +40,7 @@ test('parses a simple directory skill', async () => {
 });
 
 test('the body is byte-exact and hashed', async () => {
-  const path = join(FIXTURES, 'skills/simple-prompt');
+  const path = join(FIXTURES, 'skills/changelog-writer');
   const { ir } = await parseSkill({ path, from: 'claude-code' });
   const source = await readFile(join(path, 'SKILL.md'), 'utf8');
 
@@ -192,7 +192,7 @@ test('the IR validates against its published schema', async () => {
   const validate = new Ajv2020({ allErrors: true, strict: false }).compile(schema);
 
   for (const [path, from] of [
-    ['skills/simple-prompt', 'claude-code'],
+    ['skills/changelog-writer', 'claude-code'],
     ['skills/report-builder', 'claude-code'],
     ['skills/flow-release', 'kimi-code'],
     ['shared-root/.agents/skills/flat-helper.md', 'kimi-code'],
@@ -218,7 +218,7 @@ test('a shared root refuses to pick an agent', async () => {
 
 test('an unknown --from is rejected with the list of agents', async () => {
   await assert.rejects(
-    () => parseSkill({ path: join(FIXTURES, 'skills/simple-prompt'), from: 'not-an-agent' }),
-    /unknown agent "not-an-agent"\. Known agents: claude-code, codex-cli, deepseek-harness, kimi-code, opencode/,
+    () => parseSkill({ path: join(FIXTURES, 'skills/changelog-writer'), from: 'not-an-agent' }),
+    /unknown agent "not-an-agent"\. Known agents: claude-ai-upload, claude-code, codex-cli, deepseek-harness, kimi-code, opencode/,
   );
 });

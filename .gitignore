@@ -4,3 +4,7 @@ coverage/
 *.tsbuildinfo
 .DS_Store
 .tmp/
+
+# Copies made by scripts/sync-package-data.mjs at pack time.
+packages/core/agents/
+packages/core/schema/

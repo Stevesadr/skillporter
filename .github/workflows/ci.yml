@@ -43,6 +43,9 @@ jobs:
       - name: Check the lint rule catalogue is current
         run: npm run rules:check
 
+      - name: Check the agent matrix is current
+        run: npm run agents:docs:check
+
       - name: Test
         run: npm run test:only
 
@@ -51,7 +54,7 @@ jobs:
         run: |
           set -euo pipefail
           node packages/cli/dist/index.js agents > /dev/null
-          node packages/cli/dist/index.js inspect fixtures/skills/simple-prompt --from claude-code > /dev/null
+          node packages/cli/dist/index.js inspect fixtures/skills/changelog-writer --from claude-code > /dev/null
           node packages/cli/dist/index.js inspect fixtures/skills/report-builder --from claude-code --json > /dev/null
 
           # `lint` exits 2 when it reports warnings only. That is a documented
@@ -60,7 +63,7 @@ jobs:
           # report is checked for content as well.
           out="$(mktemp -d)"
           set +e
-          node packages/cli/dist/index.js lint fixtures/skills/simple-prompt --for opencode > "$out/lint.txt" 2> "$out/lint.err"
+          node packages/cli/dist/index.js lint fixtures/skills/changelog-writer --for opencode > "$out/lint.txt" 2> "$out/lint.err"
           text_code=$?
           node packages/cli/dist/index.js lint fixtures/skills/report-builder --for claude-code --format json > "$out/lint.json" 2> "$out/lint-json.err"
           json_code=$?
@@ -84,7 +87,7 @@ jobs:
           out="$(mktemp -d)"
 
           # A skill with nothing to lose converts cleanly and exits 0.
-          node packages/cli/dist/index.js convert fixtures/skills/simple-prompt \
+          node packages/cli/dist/index.js convert fixtures/skills/changelog-writer \
             --from claude-code --to codex-cli,deepseek-harness,kimi-code,opencode,claude-code \
             --out "$out/clean" > /dev/null
           echo "clean conversion: exit 0"
@@ -122,6 +125,12 @@ jobs:
           echo "no executable placeholder in the claude-code output"
 
           rm -rf "$out"
+
+      - name: Check the packed tarballs work after install
+        # The source tree resolves agents/ and schema/ by walking up from dist/.
+        # A published package cannot do that, so the tarballs are installed into
+        # an empty project and driven from there.
+        run: npm run check:package
 
       - name: Check the documented exit codes
         shell: bash

@@ -156,20 +156,27 @@ what was preserved, adapted, degraded or dropped — and why. It never converts 
 
 ## Supported agents
 
-Phase 1 scope. `verified` means every fact in the profile traces to a primary source
-retrieved on the date shown.
+Six capability profiles: five agents that discover a skill directory on disk, and one
+upload form. The full matrix — discovery roots, name grammar, description limits, which
+frontmatter fields each agent honours, and the source behind every fact — is generated
+from the profiles themselves and lives in [`docs/agents.md`](docs/agents.md). It is not
+repeated here, because a table maintained by hand drifts from the data.
 
-| Agent | Project root | Global root | Name / identity | Description | Status |
-| --- | --- | --- | --- | --- | --- |
-| Claude Code | `.claude/skills` | `~/.claude/skills` | none enforced (character blocklist) | truncates at 1,536 chars | verified |
-| DeepSeek Harness (`dsh`) | `.dsh/skills`, `.agents/skills` | `~/.dsh/skills`, `~/.agents/skills` | `^[a-z0-9]+(?:-[a-z0-9]+)*$` | truncates at 500 chars | verified |
-| Codex CLI | `.agents/skills` | `~/.agents/skills` | unknown | context budget, ~8,000 chars | verified |
-| OpenCode | `.opencode/skills`, `.claude/skills`, `.agents/skills` | `~/.config/opencode/skills` | derived from path, not frontmatter | none enforced | verified |
-| Kimi Code CLI | `.kimi-code/skills`, `.agents/skills` | `~/.kimi-code/skills`, `~/.agents/skills` | case-insensitive, no grammar | required (directory form) | verified |
+| Agent | id | Reads | Verified |
+| --- | --- | --- | --- |
+| Claude Code | `claude-code` | `.claude/skills` | verified |
+| DeepSeek Harness (`dsh`) | `deepseek-harness` | `.dsh/skills`, `.agents/skills` | verified |
+| Codex CLI | `codex-cli` | `.agents/skills` | verified |
+| OpenCode | `opencode` | `.opencode/skills`, `.claude/skills`, `.agents/skills` | verified |
+| Kimi Code CLI | `kimi-code` | `.kimi-code/skills`, `.agents/skills` | verified |
+| Claude.ai / Skills API upload | `claude-ai-upload` | nothing: a bundle is uploaded | partial |
 
-Four of the five read `.agents/skills`; only Claude Code does not. Full detail, including
-source URLs and retrieval dates, is in [`docs/research.md`](docs/research.md). The
-machine-readable form is in [`agents/`](agents/).
+Four of the five directory agents read `.agents/skills`, which is why it is the default
+shared output; only Claude Code does not. `claude-ai-upload` is `partial` because only its
+name and description rules are documented — see [Honest limitations](#honest-limitations).
+
+The machine-readable form is in [`agents/`](agents/); the evidence, with URLs and retrieval
+dates, is in [`docs/research.md`](docs/research.md).
 
 ## Fidelity reporting
 
@@ -200,6 +207,9 @@ skillporter convert ./my-skill --to codex-cli,deepseek-harness,kimi-code,opencod
 
 # look, do not write
 skillporter convert ./my-skill --to claude-code --dry-run
+
+# the upload form for claude.ai / the Skills API: a folder to upload, not a root to install into
+skillporter convert ./my-skill --to claude-ai-upload --out ./upload
 ```
 
 ```
@@ -283,11 +293,16 @@ silence is the enemy.
   the syntax becomes a plain code span, reported as `adapted`, unless `--shell-injection=keep`
   is passed (reported as `degraded`) or `strip` (reported as `dropped`). Converting *away* from
   Claude Code preserves the text and reports `degraded`, listing each occurrence.
-- **Claude Code has two surfaces and only one is a target.** Local `.claude/skills` directories
-  accept every field; uploading to claude.ai / the Skills API / `package_skill.py` accepts only
-  `name`, `description`, `license`, `compatibility`, `metadata` and `allowed-tools` and
-  hard-errors on anything else. `convert` targets the local directory form. The upload form
-  needs its own profile and is not implemented yet.
+- **Claude Code has two surfaces and both are targets, with different evidence behind them.**
+  Local `.claude/skills` directories are `verified` and accept every field. The upload form
+  (claude.ai / the Skills API) is a separate profile, `claude-ai-upload`, and it is only
+  `partial`: the documentation states that `name` and `description` are required and gives
+  their rules, but it does **not** say whether `license`, `compatibility`, `metadata` or
+  `allowed-tools` are accepted. Those four are therefore dropped and reported, rather than
+  emitted on the assumption that the upload will tolerate them. If you can show, from an
+  official source, that they are accepted, the profile changes in one file — see
+  [CONTRIBUTING.md](CONTRIBUTING.md). `convert --install` refuses this target, because an
+  uploaded bundle has no discovery root to install into; `--out` writes the folder to upload.
 - **Unverified behaviours.** Codex's name grammar, OpenCode and Kimi Code symlink handling,
   Kimi Code's `license`/`compatibility`/`metadata`/`allowed-tools` support, and the flow body
   format are all `unknown`. The converter warns rather than assumes.
@@ -303,19 +318,30 @@ silence is the enemy.
 | 1a | IR, schema, parsers, `inspect`, `agents`, CI on 3 OSes | done |
 | 1b | `lint --for <agent>` with rule IDs, severities and source URLs | done |
 | 1c | `convert`, conversion report, install with backup | done |
-| 1d | Fixtures with attribution, golden/round-trip/security tests, CONTRIBUTING | planned |
+| 1d | Fixtures with attribution, golden/round-trip/property tests, package check, CONTRIBUTING, issue templates | done |
 | 2 | More Agent Skills agents via profiles (Cursor, Gemini CLI, Copilot, Zed, ZCode, Cline, Roo, Windsurf, Deep Agents) | planned |
 | 3 | Non-`SKILL.md` formats (`AGENTS.md`, Cursor rules, Gemini commands, legacy Claude commands) | planned |
 | 4 | Optional `--ai` adaptation, `doctor`, interop with `npx skills` | planned |
+
+Two things are deliberately deferred rather than forgotten:
+
+- **Git URL input** (`convert https://github.com/org/repo`). It needs a network fetch, a
+  cache, a trust decision about what a repository may contain, and a story for a private
+  repository's credentials. That is a release of its own, and it is not in the first one.
+  Until then, clone the repository and pass the directory.
+- **Publishing.** There is no npm publish, no tag and no release step in CI. The package
+  check proves the tarballs work; publishing them is a separate, deliberate decision.
 
 ## Repository layout
 
 ```
 agents/            capability profiles, one YAML per agent (data, not code)
 schema/            JSON Schema for capability profiles, the IR, the lint and conversion reports
+docs/agents.md     generated supported-agents matrix; edit the profiles, not the document
 docs/research.md   verified per-agent facts with source URLs and retrieval dates
 docs/lint-rules.md generated rule catalogue; edit the code, not the document
 docs/adr/          architecture decision records
+fixtures/          test inputs; fixtures/README.md records their provenance and licence
 fixtures/lint/     skills that each exercise one lint rule
 fixtures/golden/   committed conversion output, compared byte-for-byte by the tests
 scripts/           repository tooling
@@ -332,13 +358,21 @@ npm run typecheck          # full rebuild with checking
 npm run validate:profiles  # schema + semantic checks over agents/*.yaml
 npm run rules              # regenerate docs/lint-rules.md from the rule catalogue
 npm run rules:check        # fail if docs/lint-rules.md has drifted
+npm run agents:docs        # regenerate docs/agents.md from the profiles
+npm run agents:docs:check  # fail if docs/agents.md has drifted
 npm test                   # build, then the test suite
+npm run check:package      # pack both workspaces, install into an empty project, run the CLI
 ```
 
-Adding an agent: copy an existing profile in `agents/`, verify every field against that
-agent's official documentation, cite the URL and retrieval date, and run
-`npm run validate:profiles`. If a fact cannot be verified, set it to `unknown` with a note.
-No code is needed unless the agent does not read `SKILL.md` at all.
+`npm run check:package` exists because the source tree and an installed package are not the
+same thing: `agents/` and `schema/` sit above `dist/` in the repository and have to travel
+inside the tarball. The check packs both workspaces, installs them into an empty directory,
+and runs `agents`, `inspect`, `lint` and `convert` from there.
+
+[`CONTRIBUTING.md`](CONTRIBUTING.md) has a step-by-step guide to adding an agent — it is a
+data change, and it takes about fifteen minutes if the documentation is good. If it is not,
+the guide says what to do about that too: write `unknown`, explain why, and cite what you
+read.
 
 ## License
 

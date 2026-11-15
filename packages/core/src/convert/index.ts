@@ -91,6 +91,63 @@ async function lintOutput(
   }
 }
 
+/**
+ * Lint a converted output where it was actually installed.
+ *
+ * The staged copy answers questions about the file's content. It cannot answer
+ * questions about the file's *place*: how deep it sits below the root, whether
+ * another skill already claims the same name, whether the root is a symlink.
+ * Those are exactly the failures an install can introduce, so after writing they
+ * are evaluated against the real destination.
+ *
+ * A failure here is reported as a note rather than thrown: the skill is already
+ * on disk, and turning a post-write check into an exception would leave the
+ * caller with a written skill and an error.
+ */
+async function lintInstalled(
+  destination: string,
+  targetId: string,
+): Promise<{ lint: NonNullable<TargetReport['lint']> | null; note?: string }> {
+  try {
+    const result = await lintSkill({ path: destination, for: targetId, from: targetId });
+    return { lint: { findings: result.findings, summary: result.summary } };
+  } catch (error) {
+    return {
+      lint: null,
+      note: `could not lint ${destination} after installing it, so only the staged copy was checked: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    };
+  }
+}
+
+function findingKey(finding: { ruleId?: string; line?: number; message: string }): string {
+  return `${finding.ruleId ?? ''}|${finding.line ?? ''}|${finding.message}`;
+}
+
+/** Union of two lint runs, counting each distinct finding once. */
+function mergeLint(
+  staged: NonNullable<TargetReport['lint']>,
+  installed: NonNullable<TargetReport['lint']> | null,
+): NonNullable<TargetReport['lint']> {
+  if (installed === null) return staged;
+  const seen = new Set(staged.findings.map(findingKey));
+  const findings = [...staged.findings, ...installed.findings.filter((finding) => !seen.has(findingKey(finding)))];
+  const errors = findings.filter((finding) => finding.severity === 'error').length;
+  const warnings = findings.filter((finding) => finding.severity === 'warning').length;
+  const info = findings.filter((finding) => finding.severity === 'info').length;
+  return {
+    findings,
+    summary: {
+      errors,
+      warnings,
+      info,
+      suppressed: staged.summary.suppressed + installed.summary.suppressed,
+      result: errors > 0 ? 'error' : warnings > 0 ? 'warning' : 'clean',
+    },
+  };
+}
+
 function bytesEqual(left: readonly { path: string; bytes: Buffer }[], right: readonly { path: string; bytes: Buffer }[]): boolean {
   if (left.length !== right.length) return false;
   const sortedLeft = [...left].sort((a, b) => a.path.localeCompare(b.path));
@@ -186,6 +243,17 @@ export async function convertSkill(options: ConvertOptions): Promise<ConversionR
       });
 
     if (options.install === true) {
+      // An archive target has no discovery root: there is nothing to install
+      // into, and writing a directory somewhere the agent never looks would be
+      // worse than saying so.
+      const archive = targets.find((target) => (target.delivery ?? 'directory') === 'archive');
+      if (archive !== undefined) {
+        throw new ConversionError(
+          `${archive.id} takes an uploaded bundle and has no skill directory to install into. ` +
+            'Use --out to write the folder to upload.',
+        );
+      }
+
       const { assignments, ungrouped } = assignRoots(targets, scope, context);
       if (ungrouped.length > 0) {
         throw new ConversionError(
@@ -268,7 +336,15 @@ export async function convertSkill(options: ConvertOptions): Promise<ConversionR
 
         for (const target of group) {
           const plan = plans.get(target.id) ?? writtenPlan;
-          const lint = await lintOutput(plan, target.id, stagingRoot);
+          const staged = await lintOutput(plan, target.id, stagingRoot);
+
+          // Only a real install has a destination to check. --dry-run must not
+          // read a directory that does not exist, and must not pretend it did.
+          const installed: { lint: NonNullable<TargetReport['lint']> | null; note?: string } =
+            options.dryRun === true ? { lint: null } : await lintInstalled(destination, target.id);
+          if (installed.note !== undefined) notes.push(installed.note);
+
+          const lint = mergeLint(staged, installed.lint);
           const items: ConversionItem[] =
             group.length === 1
               ? plan.items
@@ -371,9 +447,26 @@ export async function convertSkill(options: ConvertOptions): Promise<ConversionR
     if (options.dryRun === true) {
       notes.push('--dry-run: nothing was written. The report describes what would be.');
     }
-    notes.push(
-      'post-conversion lint ran on a staged copy of each output, so rules that depend on the destination location are not part of it',
-    );
+    for (const target of targets) {
+      if ((target.delivery ?? 'directory') === 'archive') {
+        notes.push(
+          `${target.id} takes an uploaded bundle rather than a directory it scans: the folder written here is what you zip and upload, and there is no install step.`,
+        );
+      }
+    }
+    if (options.install === true && options.dryRun !== true) {
+      notes.push(
+        'post-conversion lint ran on a staged copy and again at the installed destination, so rules that depend on where the skill sits (depth, duplicate names, a symlinked root) are included',
+      );
+    } else if (options.install === true) {
+      notes.push(
+        'post-conversion lint ran on a staged copy only: --dry-run installs nothing, so rules that depend on the destination location could not be checked',
+      );
+    } else {
+      notes.push(
+        'post-conversion lint ran on a staged copy of each output; --out is not a discovery root, so rules that depend on the destination location are not part of it',
+      );
+    }
     if (!sourceKnown) {
       notes.push(
         `no agent owns this location, so ${ir.origin.agent} was assumed only to read the file. Everything that compares the source with the target uses warning severity and says the source is unknown; pass --from to remove the assumption.`,

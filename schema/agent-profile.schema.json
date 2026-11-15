@@ -33,6 +33,16 @@
       "enum": ["agent-skills", "proprietary"],
       "description": "`agent-skills` means the agent reads the Agent Skills layout natively and a data-only profile is sufficient. `proprietary` means a custom adapter is required."
     },
+    "delivery": {
+      "enum": ["directory", "archive"],
+      "default": "directory",
+      "description": "How the agent receives a skill. `directory` means it reads a discovery root on disk, so `paths` must name at least one. `archive` means the skill is uploaded as a bundle and there is no root to write to, so `paths` must be empty and the converter writes a directory for you to upload rather than installing."
+    },
+    "unknownFields": {
+      "enum": ["emit", "drop"],
+      "default": "emit",
+      "description": "What to do with a frontmatter field this profile does not describe. `emit` keeps it verbatim and reports it as degraded, which is right for an agent that tolerates extra keys. `drop` removes it and reports it as dropped, which is right where the target validates a closed set of keys and an unrecognised one could fail the whole skill."
+    },
     "verification": {
       "enum": ["verified", "partial", "unverified"],
       "description": "`verified`: every encoded fact traced to a primary source. `partial`: at least one fact is inferred or only documented by a third party. `unverified`: profile is a placeholder."
@@ -82,7 +92,8 @@
   "$defs": {
     "pathList": {
       "type": "array",
-      "minItems": 1,
+      "minItems": 0,
+      "description": "Empty only for an `archive` delivery, where the agent has no discovery root at all.",
       "items": { "$ref": "#/$defs/pathEntry" }
     },
     "pathEntry": {
@@ -155,6 +166,11 @@
         },
         "maxLength": { "type": ["integer", "null"], "minimum": 1 },
         "mustMatchDirectory": { "type": ["boolean", "null"] },
+        "reserved": {
+          "type": "array",
+          "description": "Substrings a name may not contain. An agent that reserves a word rejects the whole skill, so the converter reports it and leaves the rename to the author rather than inventing a new identity.",
+          "items": { "type": "string", "minLength": 1 }
+        },
         "enforcement": {
           "enum": ["reject", "silent-skip", "truncate", "none", "unknown"],
           "description": "What the agent does when a name violates the rules."
@@ -277,7 +293,11 @@
           "description": "Target field that carries the same meaning, when it is spelled differently."
         },
         "note": { "type": "string" },
-        "source": { "type": "string" }
+        "source": { "type": "string" },
+        "dropReason": {
+          "type": "string",
+          "description": "Why this field must not be emitted, even when its status is `unknown` rather than `unsupported`. Use when the target's acceptance of the field is undocumented and emitting it would be a guess. Without this the converter emits an `unknown` field verbatim and reports it as degraded."
+        }
       }
     },
     "fieldStatus": {

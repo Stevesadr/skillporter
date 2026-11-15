@@ -103,10 +103,24 @@ export function renderConvert(report: ConversionReport): string {
   }
 
   lines.push('');
-  const { summary } = report;
-  const verdict = summary.result === 'degraded' ? 'converted with losses' : 'converted cleanly';
-  lines.push(`  result  ${verdict}  ·  ${tally(summary)}`);
+  lines.push(`  result  ${verdictFor(report)}  ·  ${tally(report.summary)}`);
   return lines.join('\n');
+}
+
+/**
+ * The one-line answer to "did this work?".
+ *
+ * Fidelity alone is not enough: a conversion can carry everything across and
+ * still produce a skill the target refuses, because the *source* was already
+ * invalid for it. That case has to say so here, or the report reads as a
+ * success next to an error in the lint block.
+ */
+function verdictFor(report: ConversionReport): string {
+  const broken = report.targets.filter((target) => (target.lint?.summary.errors ?? 0) > 0);
+  if (broken.length > 0) {
+    return `converted, but the output will not load as written for ${broken.map((target) => target.target).join(', ')}`;
+  }
+  return report.summary.result === 'degraded' ? 'converted with losses' : 'converted cleanly';
 }
 
 function mdCell(value: string): string {
@@ -187,9 +201,7 @@ export function renderConvertMarkdown(report: ConversionReport): string {
   }
 
   const { summary } = report;
-  lines.push(
-    `**Result:** ${summary.result === 'degraded' ? 'converted with losses' : 'converted cleanly'} — ${tally(summary)}.`,
-  );
+  lines.push(`**Result:** ${verdictFor(report)} — ${tally(summary)}.`);
   return lines.join('\n');
 }
 

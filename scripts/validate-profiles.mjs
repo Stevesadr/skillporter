@@ -94,6 +94,15 @@ async function main() {
       if (field.mapsTo && !(field.mapsTo in profile.fields)) {
         problems.push(`${label}: fields.${name} mapsTo "${field.mapsTo}", which is not in fields`);
       }
+      if (field.dropReason !== undefined && field.status !== 'unknown') {
+        problems.push(
+          `${label}: fields.${name} has a dropReason but status is "${field.status}"; ` +
+            'a dropReason exists to explain dropping a field whose acceptance is unknown',
+        );
+      }
+      if (field.status === 'unknown' && field.dropReason !== undefined && field.dropReason.length < 40) {
+        problems.push(`${label}: fields.${name}.dropReason is too short to explain anything`);
+      }
     }
 
     if (profile.verification !== 'verified' && !profile.notes) {
@@ -148,6 +157,28 @@ async function main() {
           problems.push(`${label}: paths.${scope} entry "${entry.path}" contains ".." which is ambiguous`);
         }
       }
+    }
+
+    // A delivery mode and a set of discovery roots have to agree. An archive
+    // target has nowhere to install to; a directory target must say where it
+    // looks, or the converter would have to invent a location.
+    const delivery = profile.delivery ?? 'directory';
+    const hasProject = profile.paths.project.length > 0;
+    const hasGlobal = profile.paths.global.length > 0;
+    if (delivery === 'archive') {
+      if (hasProject || hasGlobal) {
+        problems.push(`${label}: delivery is "archive", so it has no discovery root, but paths is not empty`);
+      }
+    } else {
+      if (!hasProject) problems.push(`${label}: delivery is "directory", so paths.project must name at least one root`);
+      if (!hasGlobal) problems.push(`${label}: delivery is "directory", so paths.global must name at least one root`);
+    }
+
+    // A reserved word is only useful if it can be checked, and an empty one
+    // would match every name.
+    for (const word of profile.name.reserved ?? []) {
+      if (word.trim() === '') problems.push(`${label}: name.reserved contains an empty string`);
+      if (word !== word.toLowerCase()) problems.push(`${label}: name.reserved "${word}" should be lowercase to match`);
     }
 
     const supported = Object.values(profile.fields).filter((f) => f.status === 'supported').length;

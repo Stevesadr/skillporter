@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
-import { unzipSync } from 'fflate';
+import { unzipSync, type UnzipFileInfo } from 'fflate';
 import { ConversionError } from './convert/report.js';
 import { isInside, toPosix } from './paths.js';
 import type { ToolLimits } from './limits.js';
@@ -65,10 +65,58 @@ export async function extractZip(zipPath: string, limits: ToolLimits): Promise<E
   }
 
   let entries: Record<string, Uint8Array>;
+  // Limits are enforced from the central directory, before anything is
+  // inflated. Checking the compressed size of the file bounds the input, not
+  // the output: a few hundred bytes of deflate can expand to gigabytes, and
+  // `unzipSync` allocates every entry it accepts. A rejection here means the
+  // archive is refused whole, because a partial skill is worse than none.
+  const violations: string[] = [];
+  let declared = 0;
+  let count = 0;
+
   try {
-    entries = unzipSync(new Uint8Array(buffer));
+    entries = unzipSync(new Uint8Array(buffer), {
+      filter: (file: UnzipFileInfo) => {
+        // Directory entries carry no bytes and are recreated by `mkdir`.
+        if (file.name.endsWith('/') || file.name.endsWith('\\')) return false;
+
+        let safe: string;
+        try {
+          safe = assertSafeArchiveEntry(file.name);
+        } catch (error) {
+          violations.push(error instanceof Error ? error.message : String(error));
+          return false;
+        }
+
+        if (file.originalSize > limits.maxFileBytes) {
+          violations.push(
+            `"${safe}" is ${file.originalSize} bytes, over the tool limit of ${limits.maxFileBytes}. Raise it with --max-file-bytes.`,
+          );
+          return false;
+        }
+        declared += file.originalSize;
+        if (declared > limits.maxTotalBytes) {
+          violations.push(
+            `the archive expands past the tool limit of ${limits.maxTotalBytes} bytes. Raise it with --max-total-bytes.`,
+          );
+          return false;
+        }
+        count += 1;
+        if (count > limits.maxFiles) {
+          violations.push(
+            `the archive holds more than ${limits.maxFiles} files, over the tool limit of ${limits.maxFiles}. Raise it with --max-files.`,
+          );
+          return false;
+        }
+        return true;
+      },
+    });
   } catch (error) {
     throw new ConversionError(`could not read ${basename(zipPath)} as a zip archive: ${error instanceof Error ? error.message : String(error)}`);
+  }
+
+  if (violations.length > 0) {
+    throw new ConversionError(violations[0] ?? 'the archive was refused');
   }
 
   const names = Object.keys(entries).sort();

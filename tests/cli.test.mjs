@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -19,7 +19,7 @@ function run(args) {
 }
 
 test('inspect prints a human report and exits 0', async () => {
-  const { code, stdout } = await run(['inspect', 'fixtures/skills/simple-prompt', '--from', 'claude-code']);
+  const { code, stdout } = await run(['inspect', 'fixtures/skills/changelog-writer', '--from', 'claude-code']);
 
   assert.equal(code, 0);
   assert.match(stdout, /changelog-writer/);
@@ -74,18 +74,34 @@ test('a skill with a hard error exits 1', async () => {
   assert.match(stdout, /result\s+error/);
 });
 
-test('agents lists all five profiles and --json round-trips', async () => {
+test('agents lists every profile and --json round-trips', async () => {
+  const expected = ['claude-ai-upload', 'claude-code', 'codex-cli', 'deepseek-harness', 'kimi-code', 'opencode'];
+
   const human = await run(['agents']);
   assert.equal(human.code, 0);
-  for (const id of ['claude-code', 'codex-cli', 'deepseek-harness', 'kimi-code', 'opencode']) {
+  for (const id of expected) {
     assert.ok(human.stdout.includes(id), `agents output must mention ${id}`);
   }
 
   const json = await run(['agents', '--json']);
   const profiles = JSON.parse(json.stdout);
-  assert.equal(profiles.length, 5);
   assert.deepEqual(
     profiles.map((profile) => profile.id),
-    ['claude-code', 'codex-cli', 'deepseek-harness', 'kimi-code', 'opencode'],
+    expected,
   );
+
+  // An archive target has no discovery root, and the human output must say so
+  // rather than print an empty "project" line that reads as missing data.
+  assert.match(human.stdout, /delivery\s+uploaded bundle/);
+});
+
+test('--version reports the manifest version, not a hard-coded string', async () => {
+  const manifest = JSON.parse(await readFile(join(ROOT, 'packages', 'cli', 'package.json'), 'utf8'));
+  const result = await run(['--version']);
+
+  assert.equal(result.code, 0);
+  assert.equal(result.stdout.trim(), manifest.version);
+  // A version that cannot be bumped is worse than no version at all, so the
+  // placeholder is rejected explicitly rather than merely compared.
+  assert.notEqual(result.stdout.trim(), '0.0.0');
 });

@@ -1,0 +1,172 @@
+id: claude-ai-upload
+displayName: Claude.ai / Skills API upload
+format: agent-skills
+delivery: archive
+unknownFields: drop
+verification: partial
+
+notes: >-
+  The upload surface: the claude.ai skill upload and the Skills API
+  (/v1/skills). It is not a filesystem target. You hand over a bundle — a zip,
+  a set of files, or a directory through the SDK helper — and it is expanded to
+  /skills/{name}/ inside a code-execution container.
+
+  Official documentation is explicit about exactly two frontmatter fields,
+  `name` and `description`, and about their constraints. No official page says
+  what happens to a third field: it is not documented as accepted and not
+  documented as rejected. That is the gap this profile records. `name` and
+  `description` are emitted; every other field is dropped and reported, because
+  emitting it would be a guess about a validation rule nobody has published.
+  `verification: partial` is therefore deliberate and specific: the field list
+  and the name/description rules are verified, the treatment of any other field
+  is not.
+
+  Custom Skills do not sync between surfaces, so this is a separate target from
+  claude-code rather than an option on it.
+
+paths:
+  project: []
+  global: []
+
+discovery:
+  skillDirDepth: 1
+  acceptsFlatMarkdown: false
+  followsSymlinks: null
+  upwardSearch: false
+  nestedLazyLoad: false
+  note: >-
+    Not applicable: there is no directory to scan and no precedence between
+    locations. The bundle is uploaded and becomes the skill. The fields are
+    present because the schema requires them, and because a reader comparing
+    profiles should see that this target has no discovery story at all rather
+    than see them omitted.
+
+identity:
+  source: frontmatter
+  requiredInDirectoryForm: true
+  requiredInFlatForm: false
+  displayNameFrom: name
+  note: >-
+    `name` is required. When the API caller omits `display_name`, it is derived
+    from the frontmatter `name`, and the files are copied to /skills/{name}/, so
+    the name is also the container path.
+
+bodyExecution:
+  shellInjection:
+    executed: false
+    source: https://docs.claude.com/en/docs/agents-and-tools/agent-skills/overview
+    note: >-
+      No inline command syntax is documented for this surface. A Skill runs code
+      through the code-execution tool, in a container with no network access and
+      no runtime package installation, but the body is instructions to the
+      model. `false` here means "no execution syntax is documented", not
+      "documented as refused" — the schema defines it that way on purpose.
+
+name:
+  pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$'
+  maxLength: 64
+  mustMatchDirectory: false
+  reserved:
+    - anthropic
+    - claude
+  enforcement: reject
+  note: >-
+    Quoted from the upload requirements: maximum 64 characters, lowercase
+    letters, numbers and hyphens only, no XML tags, and no reserved words
+    (`anthropic`, `claude`). A name that breaks these is not a warning: the
+    upload fails. The reserved words cannot be expressed as a regex, so they are
+    listed separately and reported by their own rule; the converter does not
+    invent a replacement name for you.
+
+description:
+  maxLength: 1024
+  enforcement: reject
+  requiredInDirectoryForm: true
+  requiredInFlatForm: false
+  note: >-
+    Non-empty and at most 1,024 characters, with no XML tags. This is a hard
+    validation bound, not a display bound, so an over-long description is
+    reported as an error rather than silently shortened.
+
+limits:
+  maxSkillBytes: 31457280
+  note: >-
+    Total upload size must be under 30 MB uncompressed. Measured against the
+    bundle, not against SKILL.md alone.
+
+fields:
+  name:
+    status: supported
+    note: Required. Also becomes the container path and the default display_name.
+  description:
+    status: supported
+    note: Required. Must say both what the skill does and when to use it.
+  license:
+    status: unknown
+    dropReason: >-
+      the Agent Skills specification defines `license`, but the upload
+      documentation lists only `name` and `description`; whether the upload
+      accepts it is not documented, so it was dropped rather than guessed at
+    note: >-
+      Not documented for this surface either way. The specification defines it,
+      the upload requirements do not mention it.
+    source: https://agentskills.io/specification
+  compatibility:
+    status: unknown
+    dropReason: >-
+      the upload documentation does not mention `compatibility`; whether it is
+      accepted is not documented, so it was dropped rather than guessed at
+    note: Defined by the Agent Skills specification, absent from the upload requirements.
+    source: https://agentskills.io/specification
+  metadata:
+    status: unknown
+    dropReason: >-
+      the upload documentation does not mention `metadata`; whether it is
+      accepted is not documented, so it was dropped rather than guessed at
+    note: Defined by the Agent Skills specification, absent from the upload requirements.
+    source: https://agentskills.io/specification
+  allowed-tools:
+    status: unknown
+    dropReason: >-
+      the upload documentation does not mention `allowed-tools`; whether it is
+      accepted is not documented, so it was dropped rather than guessed at
+    note: >-
+      Experimental in the Agent Skills specification. This surface runs code
+      through the code-execution tool, which has its own permission model, so
+      the field may well be meaningless here — but that is an inference, not a
+      documented fact.
+    source: https://agentskills.io/specification
+
+sources:
+  - url: https://platform.claude.com/docs/en/build-with-claude/skills-guide
+    retrieved: 2026-11-14
+    note: >-
+      Upload methods, the bundle layout, the requirement list that names exactly
+      `name` and `description` with their constraints, the 30 MB bound, and the
+      statement that a new version must repeat the same name.
+    covers:
+      - format
+      - paths
+      - discovery
+      - identity
+      - name
+      - description
+      - fields
+  - url: https://docs.claude.com/en/docs/agents-and-tools/agent-skills/overview
+    retrieved: 2026-11-14
+    note: >-
+      The two required fields and their constraints, that custom skills do not
+      sync across surfaces, and the runtime a skill executes in.
+    covers:
+      - format
+      - identity
+      - name
+      - description
+      - bodyExecution
+  - url: https://agentskills.io/specification
+    retrieved: 2026-11-14
+    note: >-
+      Defines license, compatibility, metadata and allowed-tools. Cited so the
+      report can say where those fields come from when it reports dropping them.
+    covers:
+      - fields

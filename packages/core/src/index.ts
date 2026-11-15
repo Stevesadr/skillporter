@@ -65,7 +65,7 @@ export { convertSkill } from './convert/index.js';
 export type { ConvertOptions } from './convert/index.js';
 export { applyShellPolicy, planBody } from './convert/body.js';
 export type { BodyPlan, BodyPlanOptions, ShellPolicy } from './convert/body.js';
-export { emitField, emitScalar, isFrontmatterKey, planFields, targetKeyFor, triggeredExtensions } from './convert/frontmatter.js';
+export { emitField, emitScalar, emitScalarField, isFrontmatterKey, planFields, targetKeyFor, triggeredExtensions } from './convert/frontmatter.js';
 export type { FieldPlan, FieldPlanOptions, TargetKey } from './convert/frontmatter.js';
 export { directoryNameFor, planConversion, planIdentity } from './convert/plan.js';
 export type { NamePlan, PlannedFile, PlannedSkill, PlanOptions } from './convert/plan.js';

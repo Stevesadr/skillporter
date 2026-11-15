@@ -379,6 +379,26 @@ export async function lintSkill(options: LintOptions): Promise<LintResult> {
     );
   }
 
+  // ---- SP025: reserved words -----------------------------------------------
+  // Not a grammar problem: the name is well formed and simply belongs to the
+  // vendor. No rename is guessed, because any replacement would be a name the
+  // author did not choose.
+  for (const word of target.name.reserved ?? []) {
+    if (!identity.name.toLowerCase().includes(word.toLowerCase())) continue;
+    emit(
+      findings,
+      'SP025',
+      'error',
+      `"${identity.name}" contains "${word}", which ${target.displayName} reserves`,
+      {
+        file,
+        line: ir.frontmatter.fields.find((field) => field.key === 'name')?.line,
+        hint: `Rename the skill. ${target.id} refuses a name containing "${word}", and skillporter will not invent a replacement.`,
+        detail: { name: identity.name, reserved: word },
+      },
+    );
+  }
+
   if (target.name.mustMatchDirectory === true && frontmatterName !== undefined && frontmatterName !== directoryName) {
     emit(
       findings,
@@ -606,29 +626,40 @@ export async function lintSkill(options: LintOptions): Promise<LintResult> {
 
   if (occurrences.length > 0) {
     if (targetExecutes === true) {
-      const severity: Severity = sourceKnown && sourceExecutes === false ? 'error' : 'warning';
+      // Three cases, not two. Execution is only news when the source did not
+      // already have it. When both sides execute, planBody keeps the text
+      // byte-for-byte, so the behaviour is identical to what the skill already
+      // had: worth stating, not worth a warning. Only an unverified source
+      // leaves a real question open, and that stays a warning.
+      const introduced = sourceKnown && sourceExecutes === false;
+      const unchanged = sourceKnown && sourceExecutes === true;
+      const severity: Severity = introduced ? 'error' : unchanged ? 'info' : 'warning';
       for (const occurrence of occurrences) {
         const what = occurrence.kind === 'fenced-bang' ? 'this ```! block' : 'this placeholder';
         emit(
           findings,
           'SP016',
           severity,
-          severity === 'error'
+          introduced
             ? `${target.displayName} executes ${what} before the body is loaded, and ${sourcePhrase}`
-            : `${target.displayName} executes ${what} before the body is loaded; ${sourcePhrase}`,
+            : unchanged
+              ? `${target.displayName} executes ${what} before the body is loaded, as ${sourceAgentId} did; the text is unchanged, so this is not new behaviour`
+              : `${target.displayName} executes ${what} before the body is loaded; ${sourcePhrase}`,
           {
             file,
             line: occurrence.line,
             column: occurrence.column,
-            hint:
-              severity === 'error'
-                ? 'Converting to this agent would introduce execution the skill did not have. skillporter never runs it, but the target will.'
+            hint: introduced
+              ? 'Converting to this agent would introduce execution the skill did not have. skillporter never runs it, but the target will.'
+              : unchanged
+                ? 'Both agents execute it and the body was copied unchanged. skillporter never runs it; the target already did.'
                 : 'skillporter never runs it. Whether this is new behaviour cannot be shown without a verified source agent.',
             detail: {
               kind: occurrence.kind,
               command: occurrence.command,
               sourceExecuted: sourceExecutes,
               sourceKnown,
+              textUnchanged: unchanged,
             },
           },
         );

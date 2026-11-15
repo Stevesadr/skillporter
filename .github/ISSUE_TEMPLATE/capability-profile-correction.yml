@@ -1,0 +1,98 @@
+name: Capability profile correction
+description: A profile says something about an agent that is wrong, or that is now documented.
+title: "profile: "
+labels: ["capability-profile"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this when a file in `agents/` does not match what the agent actually does.
+
+        A correction needs a source. Without one, a maintainer would be replacing one
+        unverified claim with another, which is the failure this project exists to avoid.
+  - type: input
+    id: agent
+    attributes:
+      label: Agent
+      description: The profile id, exactly as it appears in `agents/`.
+      placeholder: deepseek-harness
+    validations:
+      required: true
+  - type: dropdown
+    id: section
+    attributes:
+      label: Which part of the profile
+      multiple: true
+      options:
+        - paths
+        - discovery
+        - identity
+        - name
+        - description
+        - bodyExecution
+        - fields
+        - extensions
+        - other
+    validations:
+      required: true
+  - type: textarea
+    id: current
+    attributes:
+      label: What the profile says now
+      description: Quote the value, and say whether it is `unknown`, `null` or a concrete value.
+      placeholder: |
+        fields.metadata.status: unknown
+        with a note saying the field is not documented
+    validations:
+      required: true
+  - type: textarea
+    id: correct
+    attributes:
+      label: What it should say
+      placeholder: |
+        fields.metadata.status: ignored
+        The frontmatter reference lists metadata and says it is accepted but not read.
+    validations:
+      required: true
+  - type: input
+    id: source
+    attributes:
+      label: Source URL
+      description: The official documentation page or source file that shows this. Not a blog post, not another converter.
+      placeholder: https://example.com/docs/skills#frontmatter
+    validations:
+      required: true
+  - type: input
+    id: retrieved
+    attributes:
+      label: Retrieved on
+      description: The date you read the page, as YYYY-MM-DD.
+      placeholder: "2026-11-15"
+    validations:
+      required: true
+  - type: textarea
+    id: quote
+    attributes:
+      label: Quote from the source
+      description: A sentence or table row that supports the correction. This is what a reviewer checks first.
+    validations:
+      required: true
+  - type: dropdown
+    id: impact
+    attributes:
+      label: Does this change what past conversions did?
+      description: |
+        If the old value was wrong, then conversions made by earlier releases may have
+        been lossy in a way the report did not mention. That is worth saying plainly.
+      options:
+        - "No: the value was unknown, and this fills in a gap"
+        - "Yes: earlier reports claimed `preserved` for something that was lost"
+        - "Yes: earlier reports warned about something that was actually fine"
+        - "Not sure"
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: skillporter version or commit
+      description: The version whose profile is wrong, if you know it.

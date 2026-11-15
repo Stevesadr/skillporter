@@ -1,0 +1,55 @@
+name: Bug report
+description: Something is wrong with a command, a conversion, or a report.
+title: "bug: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before filing: run the command with `--report json` if it is a conversion. The
+        report usually says which field it thinks it preserved, and that is the fastest
+        way to see whether the bug is in the emitter or in the report.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: The command, the output, and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: How to reproduce it
+      description: |
+        The smallest skill that shows the problem. Paste the `SKILL.md` frontmatter and
+        the relevant body lines. If the skill is private, reduce it until it is not.
+      render: markdown
+    validations:
+      required: true
+  - type: input
+    id: command
+    attributes:
+      label: The exact command
+      placeholder: skillporter convert ./my-skill --from codex-cli --to claude-code --report json
+    validations:
+      required: true
+  - type: textarea
+    id: report
+    attributes:
+      label: The report, if the problem is about fidelity
+      description: Paste the `targets[].items` entries that are wrong, not the whole file.
+      render: json
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The output of `skillporter --version`, or the commit you built from.
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Node version and operating system
+      placeholder: node 22.20.0, macOS 15.1
+    validations:
+      required: true
