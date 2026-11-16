@@ -120,3 +120,41 @@ test('--version reports the manifest version, not a hard-coded string', async ()
   // placeholder is rejected explicitly rather than merely compared.
   assert.notEqual(result.stdout.trim(), '0.0.0');
 });
+
+test('--help lists every agent name, with the aliases next to the id', async () => {
+  // The list comes from the profiles, so a new profile cannot be forgotten
+  // here. What the test guards is that the list is present at all, and that an
+  // alias is shown next to the id that owns it rather than as a separate entry.
+  const { code, stdout } = await run(['convert', '--help']);
+  assert.equal(code, 0);
+
+  for (const id of ['claude-ai-upload', 'claude-code', 'codex-cli', 'deepseek-harness', 'kimi-code', 'opencode']) {
+    assert.ok(stdout.includes(id), `--help must list ${id}`);
+  }
+  assert.match(stdout, /codex-cli \(alias: codex\)/);
+  assert.match(stdout, /deepseek-harness \(alias: dsh\)/);
+});
+
+test('an alias is accepted wherever an agent id is, and reports the canonical id', async () => {
+  const { code, stdout } = await run([
+    'lint',
+    'fixtures/skills/changelog-writer',
+    '--for',
+    'dsh',
+    '--from',
+    'codex',
+    '--json',
+  ]);
+
+  assert.notEqual(code, 1, 'the alias must resolve, not fail as an unknown agent');
+  const payload = JSON.parse(stdout);
+  assert.equal(payload.target.id, 'deepseek-harness');
+  assert.equal(payload.source.agent, 'codex-cli', 'a report names the id, never the alias that was typed');
+});
+
+test('an unknown agent lists the accepted names, aliases included', async () => {
+  const { code, stderr } = await run(['lint', 'fixtures/skills/changelog-writer', '--for', 'cursor', '--from', 'claude-code']);
+  assert.equal(code, 1);
+  assert.match(stderr, /unknown agent "cursor"/);
+  assert.match(stderr, /codex-cli \(alias: codex\)/);
+});

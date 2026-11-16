@@ -89,3 +89,48 @@ test('no profile claims a hard description limit it does not enforce', async () 
     }
   }
 });
+
+test('aliases are unique and never shadow another profile id', async () => {
+  // An alias that collides with an id would make the result depend on file
+  // order, which is exactly the kind of silent ambiguity this project refuses.
+  const profiles = (await loadProfiles()).map(({ profile }) => profile);
+  const ids = new Set(profiles.map((profile) => profile.id));
+  const seen = new Map();
+
+  for (const profile of profiles) {
+    for (const alias of profile.aliases ?? []) {
+      assert.ok(!ids.has(alias) || alias === profile.id, `${profile.id}: alias "${alias}" is another profile's id`);
+      assert.ok(!seen.has(alias), `${profile.id}: alias "${alias}" is also claimed by ${seen.get(alias)}`);
+      seen.set(alias, profile.id);
+    }
+  }
+});
+
+test('findProfile resolves an alias and prefers the id', async () => {
+  const { findProfile, loadProfiles } = await import('../packages/core/dist/index.js');
+  const profiles = await loadProfiles();
+
+  assert.equal(findProfile(profiles, 'codex')?.id, 'codex-cli');
+  assert.equal(findProfile(profiles, 'dsh')?.id, 'deepseek-harness');
+  // The full id still wins, and is never re-routed through an alias.
+  assert.equal(findProfile(profiles, 'codex-cli')?.id, 'codex-cli');
+  assert.equal(findProfile(profiles, 'codex ').id, 'codex-cli', 'surrounding space is trimmed');
+  assert.equal(findProfile(profiles, 'not-an-agent'), undefined);
+  assert.equal(findProfile(profiles, ''), undefined);
+});
+
+test('a duplicate alias is a load error, not last-one-wins', async () => {
+  const { assertUniqueAliases } = await import('../packages/core/dist/index.js');
+  const profiles = (await loadProfiles()).map(({ profile }) => profile);
+
+  assert.doesNotThrow(() => assertUniqueAliases(profiles));
+
+  const broken = [
+    { id: 'one', aliases: ['shared'] },
+    { id: 'two', aliases: ['shared'] },
+  ];
+  assert.throws(() => assertUniqueAliases(broken), /already the id or alias/);
+
+  const shadowsId = [{ id: 'one' }, { id: 'two', aliases: ['one'] }];
+  assert.throws(() => assertUniqueAliases(shadowsId), /already the id or alias/);
+});

@@ -1,5 +1,8 @@
 id: deepseek-harness
 displayName: DeepSeek Harness (dsh)
+# `dsh` is the short name the project's own documentation uses for the CLI.
+aliases:
+  - dsh
 format: agent-skills
 verification: verified
 

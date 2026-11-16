@@ -9,7 +9,7 @@ import { parseFrontmatterFields, splitFrontmatter, stringField, type RawField } 
 import { IR_VERSION, type FieldEffect, type IRFrontmatterField, type IRIdentity, type SkillIR } from './ir.js';
 import { describeLimits, resolveLimits, type ToolLimits } from './limits.js';
 import { detectLineEnding } from './paths.js';
-import { loadProfiles, type AgentProfile, type FieldStatus } from './profile.js';
+import { findProfile, knownAgentsText, loadProfiles, type AgentProfile, type FieldStatus } from './profile.js';
 
 export interface ParseOptions {
   path: string;
@@ -206,9 +206,9 @@ export async function parseSkill(options: ParseOptions): Promise<ParseResult> {
   const agentId = options.from ?? detection.agent;
   if (agentId === null) throw new AmbiguousSourceError(detection);
 
-  const profile = profiles.find((candidate) => candidate.id === agentId);
+  const profile = findProfile(profiles, agentId);
   if (profile === undefined) {
-    throw new SkillParseError(`unknown agent "${agentId}". Known agents: ${profiles.map((p) => p.id).join(', ')}`);
+    throw new SkillParseError(`unknown agent "${agentId}". Known agents: ${knownAgentsText(profiles)}`);
   }
 
   const limits = resolveLimits(options.limits);

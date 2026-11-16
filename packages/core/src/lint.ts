@@ -7,7 +7,7 @@ import type { SkillIR } from './ir.js';
 import type { ToolLimits } from './limits.js';
 import { deriveIdentity, parseSkill, SkillParseError } from './parse.js';
 import { toPosix } from './paths.js';
-import { loadProfiles, ProfileError, type AgentProfile } from './profile.js';
+import { findProfile, knownAgentsText, loadProfiles, ProfileError, type AgentProfile } from './profile.js';
 import { enforcementConsequence, ruleById, severityForEnforcement, type RuleArea } from './rules.js';
 
 export interface LintOptions {
@@ -218,11 +218,9 @@ export function caseCollisions(paths: readonly string[]): [string, string][] {
  */
 export async function lintSkill(options: LintOptions): Promise<LintResult> {
   const profiles = await loadProfiles();
-  const target = profiles.find((profile) => profile.id === options.for);
+  const target = findProfile(profiles, options.for);
   if (target === undefined) {
-    throw new ProfileError(
-      `unknown agent "${options.for}". Known agents: ${profiles.map((profile) => profile.id).join(', ')}`,
-    );
+    throw new ProfileError(`unknown agent "${options.for}". Known agents: ${knownAgentsText(profiles)}`);
   }
 
   const absolute = resolve(options.path);
@@ -258,7 +256,11 @@ export async function lintSkill(options: LintOptions): Promise<LintResult> {
     ...(options.limits === undefined ? {} : { limits: options.limits }),
   });
 
-  const source = profiles.find((profile) => profile.id === sourceAgentId) ?? null;
+  // Resolve through the alias table as well: `--from dsh` names the same
+  // profile as `--from deepseek-harness`, and a lookup by raw id alone would
+  // find nothing and silently downgrade every source-versus-target comparison
+  // to "unknown".
+  const source = findProfile(profiles, sourceAgentId) ?? null;
   const file = layout === 'directory' ? 'SKILL.md' : basename(absolute);
   const frontmatterName = stringValue(ir, 'name');
   const directoryName = basename(root);
@@ -796,7 +798,9 @@ export async function lintSkill(options: LintOptions): Promise<LintResult> {
     },
     target: { id: target.id, displayName: target.displayName, verification: target.verification },
     source: {
-      agent: sourceAgentId,
+      // The canonical id, so a report reads the same whether the caller typed
+      // the alias or the full name.
+      agent: source?.id ?? sourceAgentId,
       explicit: options.from !== undefined,
       assumed,
       detection,

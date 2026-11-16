@@ -5,7 +5,7 @@ import { extractZip, isZipPath } from '../archive.js';
 import { lintSkill } from '../lint.js';
 import { resolveLimits, type ToolLimits } from '../limits.js';
 import { AmbiguousSourceError, parseSkill } from '../parse.js';
-import { loadProfiles, ProfileError, type AgentProfile } from '../profile.js';
+import { findProfile, knownAgentsText, loadProfiles, ProfileError, type AgentProfile } from '../profile.js';
 import { planConversion, type PlannedSkill } from './plan.js';
 import { planSharedConversion } from './lcd.js';
 import {
@@ -175,9 +175,9 @@ export async function convertSkill(options: ConvertOptions): Promise<ConversionR
   const profiles = await loadProfiles();
   const targets: AgentProfile[] = [];
   for (const id of options.to) {
-    const profile = profiles.find((candidate) => candidate.id === id);
+    const profile = findProfile(profiles, id);
     if (profile === undefined) {
-      throw new ProfileError(`unknown agent "${id}". Known agents: ${profiles.map((candidate) => candidate.id).join(', ')}`);
+      throw new ProfileError(`unknown agent "${id}". Known agents: ${knownAgentsText(profiles)}`);
     }
     if (!targets.some((candidate) => candidate.id === profile.id)) targets.push(profile);
   }

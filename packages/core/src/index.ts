@@ -14,9 +14,12 @@ export { collectBundledFiles, sha256 } from './files.js';
 export type { BundledFile, CollectResult, FileEncoding } from './files.js';
 
 export {
+  assertUniqueAliases,
   clearProfileCache,
   fieldStatus,
+  findProfile,
   getProfile,
+  knownAgentsText,
   knownFields,
   loadProfiles,
   pathEntries,

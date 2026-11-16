@@ -1,5 +1,8 @@
 id: codex-cli
 displayName: Codex CLI
+# The product is Codex and the binary is `codex`; "codex" is what a reader types.
+aliases:
+  - codex
 format: agent-skills
 verification: verified
 

@@ -44,6 +44,15 @@ export interface ProfileExtension {
 export interface AgentProfile {
   id: string;
   displayName: string;
+  /**
+   * Other names this agent is known by, accepted wherever an id is.
+   *
+   * Only names the agent's own documentation uses for the same product — the
+   * binary name, or the short form its docs print. An alias never resolves to a
+   * different profile, and a duplicate alias is a profile error rather than a
+   * silent last-one-wins.
+   */
+  aliases?: string[];
   format: 'agent-skills' | 'proprietary';
   /** `archive` means the agent is fed a bundle, not a discovery root. */
   delivery?: 'directory' | 'archive';
@@ -171,6 +180,7 @@ export async function loadProfiles(options: { refresh?: boolean } = {}): Promise
   }
 
   profiles.sort((left, right) => left.id.localeCompare(right.id));
+  assertUniqueAliases(profiles);
   cached = profiles;
   return profiles;
 }
@@ -181,11 +191,63 @@ export function clearProfileCache(): void {
 
 export async function getProfile(id: string): Promise<AgentProfile> {
   const profiles = await loadProfiles();
-  const found = profiles.find((profile) => profile.id === id);
+  const found = findProfile(profiles, id);
   if (!found) {
-    throw new ProfileError(`unknown agent "${id}". Known agents: ${profiles.map((p) => p.id).join(', ')}`);
+    throw new ProfileError(`unknown agent "${id}". Known agents: ${knownAgentsText(profiles)}`);
   }
   return found;
+}
+
+/**
+ * Resolve an id or a documented alias.
+ *
+ * An exact id always wins over an alias, so adding an alias can never take a
+ * name away from an existing profile.
+ */
+export function findProfile(
+  profiles: readonly AgentProfile[],
+  idOrAlias: string,
+): AgentProfile | undefined {
+  const wanted = idOrAlias.trim();
+  if (wanted === '') return undefined;
+  return (
+    profiles.find((profile) => profile.id === wanted) ??
+    profiles.find((profile) => (profile.aliases ?? []).includes(wanted))
+  );
+}
+
+/**
+ * Every accepted name, for help text and for the "unknown agent" error.
+ *
+ * Aliases are shown next to the id that owns them so the list doubles as the
+ * answer to "which spelling do I type". A duplicate alias is reported rather
+ * than resolved silently: two profiles answering to one name would make the
+ * result depend on file order.
+ */
+export function knownAgentsText(profiles: readonly AgentProfile[]): string {
+  return profiles
+    .map((profile) => {
+      const aliases = profile.aliases ?? [];
+      return aliases.length === 0 ? profile.id : `${profile.id} (alias: ${aliases.join(', ')})`;
+    })
+    .join(', ');
+}
+
+/** Throw when two profiles claim the same alias, or one claims another's id. */
+export function assertUniqueAliases(profiles: readonly AgentProfile[]): void {
+  const seen = new Map<string, string>();
+  for (const profile of profiles) seen.set(profile.id, profile.id);
+  for (const profile of profiles) {
+    for (const alias of profile.aliases ?? []) {
+      const owner = seen.get(alias);
+      if (owner !== undefined) {
+        throw new ProfileError(
+          `agents/${profile.id}.yaml claims the alias "${alias}", which is already the id or alias of ${owner}`,
+        );
+      }
+      seen.set(alias, profile.id);
+    }
+  }
 }
 
 export function profileIds(profiles: readonly AgentProfile[]): string[] {

@@ -9,6 +9,7 @@ import {
   convertSkill,
   exitCodeForConversion,
   exitCodeForSummary,
+  knownAgentsText,
   lintSkill,
   loadProfiles,
   parseSkill,
@@ -41,6 +42,25 @@ program
   .description('Convert AI agent skills between agent formats, with an explicit fidelity report.')
   .version(readVersion());
 
+/**
+ * Every accepted agent name, for the help text.
+ *
+ * Built from the capability profiles rather than written here, so adding a
+ * profile adds its name to `--help` with no CLI change and no chance of the two
+ * drifting apart. A failure is not fatal: help has to work even when the
+ * profiles cannot be read, so the list is omitted and everything else stays.
+ */
+async function agentChoices(): Promise<string> {
+  try {
+    return knownAgentsText(await loadProfiles());
+  } catch {
+    return '';
+  }
+}
+
+const AGENTS = await agentChoices();
+const agentHint = AGENTS === '' ? '' : `: ${AGENTS}`;
+
 function limitOptions(command: Command): Command {
   return command
     .addOption(new Option('--max-file-bytes <bytes>', 'tool limit: largest bundled file to read').argParser(Number))
@@ -62,7 +82,7 @@ limitOptions(
   program
     .command('inspect <path>')
     .description('parse a skill and show its intermediate representation plus any diagnostics')
-    .option('--from <agent>', 'source agent, required when the directory is shared by several agents')
+    .option('--from <agent>', `source agent, required when the directory is shared by several agents${agentHint}`)
     .option('--json', 'emit the IR as JSON')
     .action(async (target: string, options: Record<string, unknown>) => {
       try {
@@ -90,7 +110,7 @@ limitOptions(
   program
     .command('lint <path>')
     .description('check whether a skill will work on a target agent. Read-only: nothing is executed and nothing is written')
-    .requiredOption('--for <agent>', 'target agent to check against')
+    .requiredOption('--for <agent>', `target agent to check against${agentHint}`)
     .option('--from <agent>', 'source agent; inferred from the path when omitted')
     .addOption(new Option('--format <format>', 'output format').choices(['text', 'json']).default('text'))
     .option('--json', 'alias for --format json')
@@ -124,8 +144,8 @@ limitOptions(
   program
     .command('convert <path>')
     .description('convert a skill to one or more agent formats and report exactly what changed')
-    .requiredOption('--to <agents>', 'target agents, comma separated')
-    .option('--from <agent>', 'source agent; inferred from the location when omitted')
+    .requiredOption('--to <agents>', `target agents, comma separated${agentHint}`)
+    .option('--from <agent>', `source agent; inferred from the location when omitted${agentHint}`)
     .option('--out <dir>', 'write the converted skill under this directory')
     .option('--install', 'write into the target agents own skill directories')
     .option('--global', 'with --install: use the user-level skill directories')
