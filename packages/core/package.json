@@ -42,8 +42,8 @@
     "access": "public"
   },
   "scripts": {
-    "prepack": "node ../../scripts/sync-package-data.mjs",
-    "postpack": "node ../../scripts/clean-package-data.mjs"
+    "prepack": "node ../../scripts/sync-package-data.mjs core",
+    "postpack": "node ../../scripts/clean-package-data.mjs core"
   },
   "dependencies": {
     "ajv": "^8.17.1",

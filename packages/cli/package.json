@@ -41,5 +41,9 @@
   "dependencies": {
     "@skillporter/core": "^0.1.0",
     "commander": "^12.1.0"
+  },
+  "scripts": {
+    "prepack": "node ../../scripts/sync-package-data.mjs cli",
+    "postpack": "node ../../scripts/clean-package-data.mjs cli"
   }
 }

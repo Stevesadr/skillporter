@@ -124,14 +124,18 @@ Check, every time, without assuming last release's result carries over:
 - `@skillporter/core` contains `dist/`, **`agents/*.yaml`** and **`schema/*.json`**. Without the
   profiles an installed CLI cannot load a single agent.
 - `skillporter` contains `dist/` only.
+- **Both contain `README.md` and `LICENSE`.** The licence matters legally, not cosmetically:
+  Apache-2.0 section 4(a) requires giving recipients a copy of the licence, and npm only
+  auto-includes a `LICENSE` that sits inside the package directory. A symlink to the repository
+  root would not do — a tarball never contains symbolic links.
 - Neither contains `tests/`, `fixtures/`, `.workbuddy-ai/`, source maps pointing at absolute
   paths, or anything with a personal email in it.
 - `packages/cli/dist/index.js` still starts with `#!/usr/bin/env node`.
 
-`packages/core` runs `prepack` while packing, which copies the repository's `agents/` and
-`schema/` into the package directory, and `postpack` afterwards, which deletes those copies
-again. Seeing them appear and vanish is normal. A copy left behind after a failed pack is a
-stale directory that would shadow the real one — delete it before retrying.
+Each package runs `prepack` while packing, which copies what it needs into the package
+directory — `agents/` and `schema/` for core, `LICENSE` for both — and `postpack` afterwards,
+which deletes those copies again. Seeing them appear and vanish is normal. A copy left behind
+after a failed pack is a stale file that would shadow the real one; delete it before retrying.
 
 ### Step 6 — Commit and tag
 

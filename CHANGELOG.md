@@ -63,6 +63,10 @@ the exit code.
 - `--version` reads the package manifest instead of a hard-coded string.
 - The packed tarballs carry `agents/` and `schema/`; without them an installed CLI
   could not load a single profile.
+- Both packed tarballs carry `README.md` and `LICENSE`. Apache-2.0 section 4(a) requires
+  handing recipients a copy of the licence, and npm only auto-includes a `LICENSE` that sits
+  inside the package directory. Neither package had one, so both would have been published
+  without the licence text and with an empty page on npmjs.com.
 
 ### Security
 

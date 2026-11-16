@@ -8,3 +8,5 @@ coverage/
 # Copies made by scripts/sync-package-data.mjs at pack time.
 packages/core/agents/
 packages/core/schema/
+packages/core/LICENSE
+packages/cli/LICENSE
