@@ -74,6 +74,21 @@ test('a skill with a hard error exits 1', async () => {
   assert.match(stdout, /result\s+error/);
 });
 
+test('--to with no agent name names the flag instead of the list being empty', async () => {
+  // An empty value reaches the command as an empty array, and the core error
+  // for that ("no target agents given") never says which option was empty.
+  const empty = await run(['convert', 'fixtures/skills/changelog-writer', '--to', '', '--from', 'claude-code', '--dry-run']);
+  assert.equal(empty.code, 1);
+  assert.match(empty.stderr, /--to was given no agent name/);
+  assert.match(empty.stderr, /--to claude-code,codex-cli/);
+  assert.doesNotMatch(empty.stderr, /unknown agent/);
+
+  // Only separators is the same mistake with different punctuation.
+  const commas = await run(['convert', 'fixtures/skills/changelog-writer', '--to', ',', '--from', 'claude-code', '--dry-run']);
+  assert.equal(commas.code, 1);
+  assert.match(commas.stderr, /--to was given no agent name/);
+});
+
 test('agents lists every profile and --json round-trips', async () => {
   const expected = ['claude-ai-upload', 'claude-code', 'codex-cli', 'deepseek-harness', 'kimi-code', 'opencode'];
 

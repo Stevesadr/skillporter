@@ -147,6 +147,17 @@ limitOptions(
           .map((id) => id.trim())
           .filter((id) => id.length > 0);
 
+        // An empty value reaches here as an empty list, and the core error for
+        // that ("no target agents given") never mentions the flag that produced
+        // it. Say which option is empty and what a correct value looks like.
+        if (to.length === 0) {
+          process.stderr.write(
+            'error: --to was given no agent name. Pass one or more comma-separated names, for example --to claude-code,codex-cli.\n',
+          );
+          process.exitCode = 1;
+          return;
+        }
+
         const report = await convertSkill({
           path: target,
           to,
