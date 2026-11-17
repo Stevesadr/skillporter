@@ -7,6 +7,12 @@ import type { SkillIR } from './ir.js';
 import type { ToolLimits } from './limits.js';
 import { deriveIdentity, parseSkill, SkillParseError } from './parse.js';
 import { toPosix } from './paths.js';
+import {
+  invocationFamily,
+  referenceMatches,
+  renderInvocation,
+  scanInvocationReferences,
+} from './invocation.js';
 import { findProfile, knownAgentsText, loadProfiles, ProfileError, type AgentProfile } from './profile.js';
 import { enforcementConsequence, ruleById, severityForEnforcement, type RuleArea } from './rules.js';
 
@@ -100,6 +106,10 @@ function sourceFor(profile: AgentProfile, area: RuleArea): string | undefined {
   if (covering) return covering.url;
   if (area === 'bodyExecution') {
     const explicit = profile.bodyExecution.shellInjection.source;
+    if (explicit) return explicit;
+  }
+  if (area === 'invocation') {
+    const explicit = profile.invocation?.source;
     if (explicit) return explicit;
   }
   return profile.sources[0]?.url;
@@ -693,6 +703,63 @@ export async function lintSkill(options: LintOptions): Promise<LintResult> {
           hint: 'skillporter does not execute anything. Treat the content as untrusted until the target behaviour is verified.',
           code: 'UNKNOWN_CAPABILITY',
           detail: { count: occurrences.length, reason: 'execution-unknown', agent: target.id },
+        },
+      );
+    }
+  }
+
+  // ---- SP026: the text invokes a skill the way another agent does ----------
+  // The one loss a byte-level report cannot see. The body is copied exactly and
+  // its instructions stop being true, so nothing in the fidelity items notices.
+  // Report only: the text belongs to the author, and the hint says what to type.
+  const invocation = target.invocation;
+  if (invocation !== undefined && invocationFamily(invocation.syntax) !== 'unknown') {
+    const descriptionLine = ir.frontmatter.fields.find((field) => field.key === 'description')?.line;
+    // Mirrors parse.ts: the body starts two lines below the opening delimiter,
+    // after the YAML block, so a reported line is a line in SKILL.md.
+    const bodyLineOffset = ir.frontmatter.present ? (ir.frontmatter.raw.match(/\n/g)?.length ?? 0) + 2 : 0;
+    const references = [
+      ...scanInvocationReferences(ir.description, 0).map((reference) => ({
+        ...reference,
+        where: 'description' as const,
+        line: descriptionLine ?? reference.line,
+      })),
+      ...scanInvocationReferences(ir.body, bodyLineOffset).map((reference) => ({ ...reference, where: 'body' as const })),
+    ].filter((reference) => !referenceMatches(reference.prefix, invocation.syntax));
+
+    // One finding per distinct reference rather than per mention: a body that
+    // says "/caveman" eight times has one thing to fix.
+    const byReference = new Map<string, (typeof references)[number][]>();
+    for (const reference of references) {
+      const list = byReference.get(reference.raw) ?? [];
+      list.push(reference);
+      byReference.set(reference.raw, list);
+    }
+
+    const shownSyntax = invocation.syntax.split('{name}').join('name');
+    for (const [raw, occurrences] of byReference) {
+      const first = occurrences[0];
+      if (first === undefined) continue;
+      const suggested = renderInvocation(invocation.syntax, first.name);
+      const where = [...new Set(occurrences.map((occurrence) => occurrence.where))];
+      const places = where.map((place) => `the ${place}`).join(' and ');
+      emit(
+        findings,
+        'SP026',
+        'warning',
+        `${places} ${where.length > 1 ? 'invoke' : 'invokes'} a skill as "${raw}", but ${target.displayName} invokes one as "${shownSyntax}"`,
+        {
+          file,
+          line: first.line,
+          hint: `Write "${suggested}" instead, or say in the text that "${raw}" belongs to another agent. skillporter does not rewrite a body.`,
+          ...(invocation.source === undefined ? {} : { source: invocation.source }),
+          detail: {
+            reference: raw,
+            suggested,
+            where,
+            count: occurrences.length,
+            lines: occurrences.map((occurrence) => occurrence.line),
+          },
         },
       );
     }

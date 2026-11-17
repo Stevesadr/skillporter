@@ -72,6 +72,7 @@
     "discovery": { "$ref": "#/$defs/discovery" },
     "identity": { "$ref": "#/$defs/identity" },
     "bodyExecution": { "$ref": "#/$defs/bodyExecution" },
+    "invocation": { "$ref": "#/$defs/invocation" },
     "name": { "$ref": "#/$defs/nameRules" },
     "description": { "$ref": "#/$defs/descriptionRules" },
     "limits": { "$ref": "#/$defs/limits" },
@@ -262,6 +263,31 @@
         }
       }
     },
+    "invocation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["syntax"],
+      "description": "How a user invokes a skill in this agent's chat, taken from the agent's own documentation. SP026 compares a skill's own text against this and warns when the text uses a syntax this agent does not provide. Absent or `unknown` means unverified, and no warning is raised.",
+      "if": { "properties": { "syntax": { "const": "unknown" } } },
+      "then": { "required": ["note"] },
+      "else": { "required": ["source"] },
+      "properties": {
+        "syntax": {
+          "type": "string",
+          "pattern": "^(unknown|[/$@][a-z0-9:-]*\\{name\\})$",
+          "description": "The literal text a user types, with the skill's name written as `{name}`, for example `/{name}`, `${name}`, `@{name}` or `/skill:{name}`. `unknown` when the documentation states no per-skill invocation."
+        },
+        "source": {
+          "type": "string",
+          "pattern": "^https?://",
+          "description": "Official page that states the syntax. Required unless syntax is `unknown`."
+        },
+        "note": {
+          "type": "string",
+          "description": "Why the syntax is unknown, or a qualification the source makes, such as which forms are namespaced."
+        }
+      }
+    },
     "truncation": {
       "type": "object",
       "additionalProperties": false,
@@ -354,7 +380,7 @@
           "type": "array",
           "description": "Which parts of the profile this source substantiates. Lint cites the source that covers the rule's area.",
           "items": {
-            "enum": ["format", "paths", "discovery", "identity", "name", "description", "fields", "bodyExecution"]
+            "enum": ["format", "paths", "discovery", "identity", "name", "description", "fields", "bodyExecution", "invocation"]
           }
         },
         "note": { "type": "string" }

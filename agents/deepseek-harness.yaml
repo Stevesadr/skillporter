@@ -75,6 +75,14 @@ bodyExecution:
       No shell-execution syntax is documented for skill bodies. This records the
       absence of documentation, not a documented denial.
 
+invocation:
+  syntax: unknown
+  note: >-
+    The skills subsystem documents a `user-invocable` frontmatter flag and a
+    model-side `skill({ name })` tool, but never states a command a human types
+    to invoke a skill. Marked unknown rather than guessed, so SP026 raises no
+    invocation findings for this target.
+
 name:
   pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$'
   maxLength: null

@@ -66,6 +66,13 @@ bodyExecution:
       No shell-execution syntax is documented for skill bodies. This records the
       absence of documentation, not a documented denial.
 
+invocation:
+  syntax: '${name}'
+  source: https://developers.openai.com/codex/skills
+  note: >-
+    "In Codex CLI or the IDE extension, run `/skills` or type `$` to mention a
+    skill." `/skills` only lists them; `$name` is the invocation.
+
 name:
   pattern: null
   maxLength: null

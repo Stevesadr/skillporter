@@ -13,7 +13,8 @@ export type RuleArea =
   | 'name'
   | 'description'
   | 'fields'
-  | 'bodyExecution';
+  | 'bodyExecution'
+  | 'invocation';
 
 /**
  * Where a rule's authority comes from.
@@ -424,6 +425,20 @@ export const LINT_RULES: readonly LintRule[] = [
     fix: 'Rename the skill. A reserved word cannot be dropped from a name without inventing a different identity for someone else.',
     description:
       'Profile-driven and separate from SP001 because a reserved word is not a grammar violation: the name is perfectly well formed, it just belongs to the vendor. The converter does not rewrite it, because any replacement it chose would be a name the author did not pick.',
+  },
+  {
+    id: 'SP026',
+    slug: 'invocation-mismatch',
+    title: 'Text invokes a skill with syntax the target does not provide',
+    area: 'invocation',
+    code: 'INVOCATION_MISMATCH',
+    derivedFrom: 'invocation.syntax',
+    derivation: 'profile',
+    severityPolicy:
+      'always warning when the profile states a syntax; nothing at all when it is unknown or absent, because an unverified syntax cannot make a reference wrong',
+    fix: 'Rewrite the reference to the syntax the target documents, or say in the text that the command belongs to another agent. skillporter never rewrites a body.',
+    description:
+      'A body written for one agent says "run `/caveman`". That sentence survives every byte-level check and is false on an agent that wants `$caveman`, so no fidelity item can see it. This rule reads the description and the body, finds invocation-shaped references, and compares the leading character with the target profile. Report only: the text is the author\'s, and the report says what to change rather than changing it. Fenced code blocks are skipped, because a block holds shell commands and paths far more often than chat commands.',
   },
 ];
 

@@ -12,18 +12,21 @@ confirmed. An unknown fact is never guessed: it is written as `unknown` and repo
 
 ## At a glance
 
-| Agent | id | Delivery | Project roots | Global roots | Identity from | Name | Description | Executes body shell | Verified |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Claude.ai / Skills API upload | `claude-ai-upload` | uploaded bundle | — | — | frontmatter | `^[a-z0-9]+(?:-[a-z0-9]+)*$` · ≤ 64 · reserved: `anthropic`, `claude` · (reject) | ≤ 1024 · (reject) | no | partial |
-| Claude Code | `claude-code` | directory | `.claude/skills`<br>`<subdir>/.claude/skills`<br>`<add-dir>/.claude/skills` | `~/.claude/skills`<br>`~/.claude/skills/synced`<br>`<managed-settings-dir>/.claude/skills`<br>`<plugin-root>/skills` | frontmatter-or-directory | no grammar · (silent-skip) | no limit · (truncate) · display truncation at 1536 characters | yes | verified |
-| Codex CLI | `codex-cli` | directory | `<cwd>/.agents/skills`<br>`<ancestor>/.agents/skills`<br>`<repoRoot>/.agents/skills` | `~/.agents/skills`<br>`/etc/codex/skills`<br>`<bundled-with-codex>` | frontmatter | no grammar · enforcement unknown | no limit · (truncate) · display truncation at 8000 characters | no | verified |
-| DeepSeek Harness (dsh) | `deepseek-harness` | directory | `<projectRoot>/.dsh/skills`<br>`<projectRoot>/.agents/skills` | `<customSkillDirs[]>`<br>`~/.dsh/skills`<br>`~/.agents/skills`<br>`<bundledSkillDir>` | frontmatter | `^[a-z0-9]+(?:-[a-z0-9]+)*$` · (silent-skip) | no limit · (truncate) · display truncation at 500 characters | no | verified |
-| Kimi Code CLI | `kimi-code` | directory | `.kimi-code/skills`<br>`.agents/skills` | `$KIMI_CODE_HOME/skills`<br>`~/.agents/skills`<br>`<extra_skill_dirs[]>`<br>`<builtin>` | frontmatter-or-filename | no grammar · (reject) | no limit · (reject) | no | verified |
-| OpenCode | `opencode` | directory | `.opencode/skills`<br>`.claude/skills`<br>`.agents/skills` | `~/.config/opencode/skills`<br>`~/.claude/skills`<br>`~/.agents/skills`<br>`<skills[] config entries>` | path | no grammar | no limit | no | verified |
+| Agent | id | Delivery | Project roots | Global roots | Identity from | Name | Description | Executes body shell | Invoke as | Verified |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Claude.ai / Skills API upload | `claude-ai-upload` | uploaded bundle | — | — | frontmatter | `^[a-z0-9]+(?:-[a-z0-9]+)*$` · ≤ 64 · reserved: `anthropic`, `claude` · (reject) | ≤ 1024 · (reject) | no | unknown | partial |
+| Claude Code | `claude-code` | directory | `.claude/skills`<br>`<subdir>/.claude/skills`<br>`<add-dir>/.claude/skills` | `~/.claude/skills`<br>`~/.claude/skills/synced`<br>`<managed-settings-dir>/.claude/skills`<br>`<plugin-root>/skills` | frontmatter-or-directory | no grammar · (silent-skip) | no limit · (truncate) · display truncation at 1536 characters | yes | `/name` | verified |
+| Codex CLI | `codex-cli` | directory | `<cwd>/.agents/skills`<br>`<ancestor>/.agents/skills`<br>`<repoRoot>/.agents/skills` | `~/.agents/skills`<br>`/etc/codex/skills`<br>`<bundled-with-codex>` | frontmatter | no grammar · enforcement unknown | no limit · (truncate) · display truncation at 8000 characters | no | `$name` | verified |
+| DeepSeek Harness (dsh) | `deepseek-harness` | directory | `<projectRoot>/.dsh/skills`<br>`<projectRoot>/.agents/skills` | `<customSkillDirs[]>`<br>`~/.dsh/skills`<br>`~/.agents/skills`<br>`<bundledSkillDir>` | frontmatter | `^[a-z0-9]+(?:-[a-z0-9]+)*$` · (silent-skip) | no limit · (truncate) · display truncation at 500 characters | no | unknown | verified |
+| Kimi Code CLI | `kimi-code` | directory | `.kimi-code/skills`<br>`.agents/skills` | `$KIMI_CODE_HOME/skills`<br>`~/.agents/skills`<br>`<extra_skill_dirs[]>`<br>`<builtin>` | frontmatter-or-filename | no grammar · (reject) | no limit · (reject) | no | `/skill:name` | verified |
+| OpenCode | `opencode` | directory | `.opencode/skills`<br>`.claude/skills`<br>`.agents/skills` | `~/.config/opencode/skills`<br>`~/.claude/skills`<br>`~/.agents/skills`<br>`<skills[] config entries>` | path | no grammar | no limit | no | `@name` | verified |
 
 A project root is relative to the project. A global root is under the user home. `directory` means the agent
 discovers a folder on disk; `uploaded bundle` means the skill is uploaded and has no discovery root, so
 `convert --install` refuses it and `--out` writes the folder to upload instead.
+
+"Invoke as" is how a user starts a skill from the chat prompt, with the skill name written as `name`. `unknown`
+means the agent documents no per-skill command, and no lint rule may then claim a reference is wrong.
 
 ## Frontmatter fields
 

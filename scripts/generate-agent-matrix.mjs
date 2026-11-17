@@ -72,6 +72,18 @@ function delivery(profile) {
   return profile.delivery === 'archive' ? 'uploaded bundle' : 'directory';
 }
 
+/**
+ * How a user invokes a skill, with the skill's own name in place of `{name}`.
+ *
+ * `unknown` is printed rather than left blank: a blank cell reads as "not
+ * applicable", and this column is exactly where the difference matters.
+ */
+function invocation(profile) {
+  const syntax = profile.invocation?.syntax;
+  if (syntax === undefined || syntax === 'unknown') return 'unknown';
+  return `\`${syntax.split('{name}').join('name')}\``;
+}
+
 const lines = [];
 lines.push('# Supported agents');
 lines.push('');
@@ -107,9 +119,10 @@ lines.push(
       nameRule(profile),
       descriptionRule(profile),
       shell(profile),
+      invocation(profile),
       profile.verification,
     ]),
-    ['Agent', 'id', 'Delivery', 'Project roots', 'Global roots', 'Identity from', 'Name', 'Description', 'Executes body shell', 'Verified'],
+    ['Agent', 'id', 'Delivery', 'Project roots', 'Global roots', 'Identity from', 'Name', 'Description', 'Executes body shell', 'Invoke as', 'Verified'],
   ),
 );
 lines.push('');
@@ -117,6 +130,11 @@ lines.push(
   'A project root is relative to the project. A global root is under the user home. `directory` means the agent',
   'discovers a folder on disk; `uploaded bundle` means the skill is uploaded and has no discovery root, so',
   '`convert --install` refuses it and `--out` writes the folder to upload instead.',
+);
+lines.push('');
+lines.push(
+  '"Invoke as" is how a user starts a skill from the chat prompt, with the skill name written as `name`. `unknown`',
+  'means the agent documents no per-skill command, and no lint rule may then claim a reference is wrong.',
 );
 lines.push('');
 

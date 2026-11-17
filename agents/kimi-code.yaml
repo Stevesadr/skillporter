@@ -86,6 +86,14 @@ bodyExecution:
       `sessionStart.skill` is documented as injecting text only and executing
       nothing, which is adjacent evidence but not a statement about skill bodies.
 
+invocation:
+  syntax: '/skill:{name}'
+  source: https://www.kimi.com/code/docs/kimi-code-cli/customization/skills.html
+  note: >-
+    "用户通过斜杠命令主动调用：/skill:code-style". The literal `skill:` segment is
+    part of the command, so a bare "/name" does not resolve here even though it
+    starts with a slash.
+
 name:
   pattern: null
   maxLength: null

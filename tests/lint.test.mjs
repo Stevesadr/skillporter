@@ -8,7 +8,7 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import Ajv2020 from 'ajv/dist/2020.js';
 
-import { LINT_RULES, caseCollisions, clearProfileCache, exitCodeForSummary, lintSkill } from '../packages/core/dist/index.js';
+import { LINT_RULES, caseCollisions, clearProfileCache, exitCodeForSummary, lintSkill, scanInvocationReferences } from '../packages/core/dist/index.js';
 
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const CLI = join(ROOT, 'packages', 'cli', 'dist', 'index.js');
@@ -57,6 +57,7 @@ const RULE_CASES = [
   { rule: 'SP023', fail: ['report-builder', 'claude-code', { maxFiles: 1 }], pass: ['report-builder', 'claude-code'] },
   { rule: 'SP024', fail: ['no-frontmatter', 'deepseek-harness'], pass: ['changelog-writer', 'deepseek-harness'] },
   { rule: 'SP025', fail: ['reserved-name', 'claude-ai-upload'], pass: ['reserved-name', 'claude-code'] },
+  { rule: 'SP026', fail: ['slash-invoker', 'codex-cli'], pass: ['slash-invoker', 'claude-code'] },
 ];
 
 /** Resolve a short fixture name to a real path, preferring the lint fixtures. */
@@ -663,4 +664,92 @@ test('docs/lint-rules.md matches the catalogue', async () => {
     });
   });
   assert.equal(output.code, 0, output.stderr || output.stdout);
+});
+
+// ---------------------------------------------------------------------------
+// SP026: the text invokes a skill the way its author's agent does.
+//
+// The loss this rule exists for is invisible to every fidelity item: the body
+// is copied byte-for-byte and its instructions stop being true.
+// ---------------------------------------------------------------------------
+
+test('SP026 names the target syntax and suggests the rewritten reference', async () => {
+  const result = await lint(`${LINT_ROOT}/slash-invoker`, { for: 'codex-cli', from: 'claude-code' });
+  const finding = result.findings.find((item) => item.ruleId === 'SP026');
+  assert.ok(finding, 'the slash reference must be reported for an agent that uses $');
+  assert.equal(finding.severity, 'warning');
+  assert.match(finding.message, /"\$name"/, 'the message must show the target syntax');
+  assert.match(finding.hint ?? '', /"\$slash-invoker"/, 'the hint must show the rewritten reference');
+  assert.equal(finding.source, 'https://developers.openai.com/codex/skills');
+  // Two distinct references, not one per mention.
+  const distinct = new Set(
+    result.findings.filter((item) => item.ruleId === 'SP026').map((item) => item.detail?.reference),
+  );
+  assert.deepEqual([...distinct].sort(), ['/slash-invoker', '/slash-invoker-compact']);
+});
+
+test('SP026 stays silent for a target whose syntax is not documented', async () => {
+  // A rule may not call a reference wrong on the strength of a guess. DeepSeek
+  // Harness documents a user-invocable flag and a model-side tool, no command.
+  const result = await lint(`${LINT_ROOT}/slash-invoker`, { for: 'deepseek-harness', from: 'claude-code' });
+  assert.equal(has(result, 'SP026'), false);
+});
+
+test('SP026 reads a namespaced slash form as a different syntax', async () => {
+  // Kimi Code types `/skill:name`; the leading slash is shared with Claude Code
+  // but the command is not, so a bare `/name` does not resolve there.
+  const result = await lint(`${LINT_ROOT}/slash-invoker`, { for: 'kimi-code', from: 'claude-code' });
+  const finding = result.findings.find((item) => item.ruleId === 'SP026');
+  assert.ok(finding);
+  assert.match(finding.message, /"\/skill:name"/);
+  assert.match(finding.hint ?? '', /"\/skill:slash-invoker"/);
+});
+
+test('SP026 does not mistake paths, URLs, division or built-ins for an invocation', async () => {
+  // The fixture carries all of these on purpose. A rule that flags them would
+  // be noise, and noise is what teaches a reader to skip the report.
+  const references = scanInvocationReferences(
+    [
+      'a path: `scripts/release/notes.sh`',
+      'a URL: <https://example.com/docs/slash-invoker>',
+      'a division: 12 / 4',
+      'a shell command: `/usr/bin/env node`',
+      'a built-in: `/help`',
+      'a link target: [the guide](./references/guide.md)',
+      'an absolute link: [the guide](/guide)',
+    ].join('\n'),
+  );
+  assert.deepEqual(references.map((reference) => reference.raw), []);
+});
+
+test('SP026 reads the three documented syntaxes, and skips fenced blocks', () => {
+  const text = ['run /alpha now', 'then $beta', 'or @gamma', '```', '/delta', '```'].join('\n');
+  const references = scanInvocationReferences(text, 10);
+  assert.deepEqual(
+    references.map((reference) => [reference.raw, reference.prefix, reference.line]),
+    [
+      ['/alpha', '/', 11],
+      ['$beta', '$', 12],
+      ['@gamma', '@', 13],
+    ],
+  );
+});
+
+test('SP026 never rewrites the body it complains about', async () => {
+  // Report only. If a conversion ever rewrote the text, the fidelity report
+  // would be describing bytes the author did not write.
+  const { convertSkill } = await import('../packages/core/dist/index.js');
+  const dir = await mkdtemp(join(ROOT, '.tmp', 'sp026-'));
+  const report = await convertSkill({
+    path: resolve(ROOT, `${LINT_ROOT}/slash-invoker`),
+    from: 'claude-code',
+    to: ['codex-cli'],
+    out: dir,
+    stagingRoot: join(ROOT, '.tmp', 'stage'),
+  });
+
+  const written = await readFile(join(report.targets[0].destination, 'SKILL.md'), 'utf8');
+  assert.match(written, /Run `\/slash-invoker` at the start of a message/);
+  const finding = report.targets[0].lint?.findings.find((item) => item.ruleId === 'SP026');
+  assert.ok(finding, 'the conversion report must carry the finding');
 });

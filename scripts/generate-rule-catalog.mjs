@@ -19,7 +19,17 @@ const RULES_MODULE = join(ROOT, 'packages', 'core', 'dist', 'rules.js');
 
 const { LINT_RULES, rulesByDiagnosticCode } = await import(`file://${RULES_MODULE}`);
 
-const AREA_ORDER = ['format', 'paths', 'discovery', 'identity', 'name', 'description', 'fields', 'bodyExecution'];
+const AREA_ORDER = [
+  'format',
+  'paths',
+  'discovery',
+  'identity',
+  'name',
+  'description',
+  'fields',
+  'bodyExecution',
+  'invocation',
+];
 
 const AREA_TITLE = {
   format: 'File format and layout',
@@ -30,6 +40,7 @@ const AREA_TITLE = {
   description: 'Description',
   fields: 'Frontmatter fields',
   bodyExecution: 'Body execution',
+  invocation: 'Skill invocation in the text',
 };
 
 function cell(text) {

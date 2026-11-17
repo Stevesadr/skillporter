@@ -62,6 +62,14 @@ bodyExecution:
       model. `false` here means "no execution syntax is documented", not
       "documented as refused" — the schema defines it that way on purpose.
 
+invocation:
+  syntax: unknown
+  note: >-
+    This target is an uploaded archive, not a chat surface with a command line.
+    The skills guide describes how a skill is packaged and uploaded and how the
+    model uses it, but no per-skill string a person types. Unknown, so SP026
+    stays silent.
+
 name:
   pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$'
   maxLength: 64

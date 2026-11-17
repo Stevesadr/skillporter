@@ -134,3 +134,55 @@ test('a duplicate alias is a load error, not last-one-wins', async () => {
   const shadowsId = [{ id: 'one' }, { id: 'two', aliases: ['one'] }];
   assert.throws(() => assertUniqueAliases(shadowsId), /already the id or alias/);
 });
+
+// ---------------------------------------------------------------------------
+// invocation: how a user invokes a skill, which SP026 reads.
+//
+// The field is optional in the schema so a third-party profile still loads, but
+// every profile in this repository has to answer it. "unknown" is an answer;
+// silence is not.
+// ---------------------------------------------------------------------------
+
+test('every profile states how a skill is invoked, and backs it up', async () => {
+  const profiles = await loadProfiles();
+  assert.ok(profiles.length > 0);
+
+  for (const { file, profile } of profiles) {
+    const invocation = profile.invocation;
+    assert.ok(invocation, `${file} has no invocation block`);
+    assert.equal(typeof invocation.syntax, 'string', `${file} has no invocation.syntax`);
+
+    if (invocation.syntax === 'unknown') {
+      // An unknown has to say what was checked, or the next reader cannot tell
+      // "not documented" from "nobody looked".
+      assert.ok(invocation.note, `${file} says unknown without a note saying why`);
+      assert.equal(invocation.source, undefined, `${file} says unknown but cites a source`);
+    } else {
+      assert.match(invocation.syntax, /\{name\}/, `${file} syntax has no {name} placeholder`);
+      assert.match(String(invocation.source), /^https?:\/\//, `${file} cites no official source`);
+    }
+  }
+});
+
+test('the invocation syntax pattern accepts the documented forms and rejects guesses', async () => {
+  const schema = JSON.parse(await readFile(join(ROOT, 'schema', 'agent-profile.schema.json'), 'utf8'));
+  const validate = new Ajv2020({ allErrors: true, strict: false }).compile(schema);
+
+  const base = (await loadProfiles())[0].profile;
+  const withInvocation = (invocation) => ({ ...base, invocation });
+
+  for (const syntax of ['/{name}', '${name}', '@{name}', '/skill:{name}']) {
+    assert.ok(
+      validate(withInvocation({ syntax, source: 'https://example.com/docs' })),
+      `${syntax} should be accepted`,
+    );
+  }
+
+  // No placeholder: a syntax nobody could render back to a real command.
+  assert.equal(validate(withInvocation({ syntax: '/caveman', source: 'https://example.com' })), false);
+  // A known syntax with no source: unverifiable by construction.
+  assert.equal(validate(withInvocation({ syntax: '/{name}' })), false);
+  // Unknown with no note: says nothing about what was checked.
+  assert.equal(validate(withInvocation({ syntax: 'unknown' })), false);
+  assert.ok(validate(withInvocation({ syntax: 'unknown', note: 'the docs describe no command' })));
+});

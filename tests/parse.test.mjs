@@ -217,8 +217,10 @@ test('a shared root refuses to pick an agent', async () => {
 });
 
 test('an unknown --from is rejected with the list of agents', async () => {
+  // Every id, and the short name where a profile has one, so the reader does not
+  // have to guess which spelling the tool accepts.
   await assert.rejects(
     () => parseSkill({ path: join(FIXTURES, 'skills/changelog-writer'), from: 'not-an-agent' }),
-    /unknown agent "not-an-agent"\. Known agents: claude-ai-upload, claude-code, codex-cli, deepseek-harness, kimi-code, opencode/,
+    /unknown agent "not-an-agent"\. Known agents: claude-ai-upload, claude-code, codex-cli \(alias: codex\), deepseek-harness \(alias: dsh\), kimi-code, opencode/,
   );
 });

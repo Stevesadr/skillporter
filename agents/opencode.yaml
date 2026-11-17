@@ -78,6 +78,13 @@ bodyExecution:
       No shell-execution syntax is documented for skill bodies. This records the
       absence of documentation, not a documented denial.
 
+invocation:
+  syntax: '@{name}'
+  source: https://opencode.ai/docs/skills/
+  note: >-
+    "To load a skill yourself, mention it in your prompt as `@skill-id`." The ID
+    is the path-derived, case-sensitive skill ID, not the frontmatter name.
+
 name:
   pattern: null
   maxLength: null

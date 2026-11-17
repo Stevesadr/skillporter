@@ -4,6 +4,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Ajv2020 } from 'ajv/dist/2020.js';
 import { parse as parseYaml } from 'yaml';
+import type { InvocationProfile } from './invocation.js';
 import type { RuleArea } from './rules.js';
 
 export type FieldStatus = 'supported' | 'ignored' | 'emulated' | 'unsupported' | 'unknown';
@@ -85,6 +86,14 @@ export interface AgentProfile {
       note?: string;
     };
   };
+  /**
+   * How a user invokes a skill in this agent's chat, as documented by the agent.
+   *
+   * Absent and `unknown` mean the same thing: the syntax could not be verified,
+   * so no rule may claim a reference is wrong. SP026 reads this field and stays
+   * silent without it.
+   */
+  invocation?: InvocationProfile;
   name: {
     pattern: string | null;
     maxLength: number | null;

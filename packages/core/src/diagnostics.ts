@@ -40,6 +40,8 @@ export const DIAGNOSTIC_CODES = [
   'FLAT_LAYOUT',
   /** The identity was derived from the path because frontmatter did not supply it. */
   'IDENTITY_DERIVED',
+  /** The skill's text invokes a skill with syntax the target agent does not provide. */
+  'INVOCATION_MISMATCH',
 ] as const;
 
 export type DiagnosticCode = (typeof DIAGNOSTIC_CODES)[number];
