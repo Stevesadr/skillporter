@@ -4,7 +4,7 @@
   "title": "skillporter conversion report",
   "type": "object",
   "additionalProperties": false,
-  "required": ["tool", "source", "targets", "roots", "overlaps", "notes", "mode", "dryRun", "summary"],
+  "required": ["tool", "source", "targets", "roots", "overlaps", "notes", "mode", "dryRun", "unique", "summary"],
   "properties": {
     "tool": {
       "type": "object",
@@ -136,6 +136,7 @@
       }
     },
     "notes": { "type": "array", "items": { "type": "string" } },
+    "unique": { "$ref": "#/$defs/uniqueSummary" },
     "summary": { "$ref": "#/$defs/summary" }
   },
   "$defs": {
@@ -151,6 +152,21 @@
         "degraded": { "type": "integer", "minimum": 0 },
         "dropped": { "type": "integer", "minimum": 0 },
         "result": { "enum": ["clean", "degraded"] }
+      }
+    },
+    "uniqueSummary": {
+      "description": "The same items counted once each across every target, at the worst fidelity any target gave them. `summary` is the sum of one item list per target, so the two differ whenever more than one target is used.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["preserved", "adapted", "renamed", "degraded", "dropped", "result", "items"],
+      "properties": {
+        "preserved": { "type": "integer", "minimum": 0 },
+        "adapted": { "type": "integer", "minimum": 0 },
+        "renamed": { "type": "integer", "minimum": 0 },
+        "degraded": { "type": "integer", "minimum": 0 },
+        "dropped": { "type": "integer", "minimum": 0 },
+        "result": { "enum": ["clean", "degraded"] },
+        "items": { "type": "integer", "minimum": 0 }
       }
     },
     "item": {

@@ -11,6 +11,7 @@ import { planSharedConversion } from './lcd.js';
 import {
   ConversionError,
   summariseReport,
+  summariseUnique,
   type ConversionReport,
   type ConversionItem,
   type OverlapReport,
@@ -286,8 +287,12 @@ export async function convertSkill(options: ConvertOptions): Promise<ConversionR
           if (identical && first !== undefined) {
             for (const plan of individual) plans.set(plan.target.id, plan);
             writtenPlan = first;
+            // Tense matters here: a dry run must not report a write that did
+            // not happen, and the reader is checking exactly that.
             notes.push(
-              `${group.map((target) => target.id).join(', ')} produced byte-identical output, so it was written once to ${assignment.root.path}`,
+              options.dryRun === true
+                ? `${group.map((target) => target.id).join(', ')} produce byte-identical output, so one copy would be written to ${assignment.root.path}`
+                : `${group.map((target) => target.id).join(', ')} produced byte-identical output, so it was written once to ${assignment.root.path}`,
             );
           } else {
             const shared = await planSharedConversion({
@@ -301,7 +306,9 @@ export async function convertSkill(options: ConvertOptions): Promise<ConversionR
             for (const target of group) plans.set(target.id, shared);
             writtenPlan = shared;
             notes.push(
-              `${group.map((target) => target.id).join(', ')} share ${assignment.root.path} but would produce different files, so a least-common-denominator copy was written. Pass --strict to make that a failure.`,
+              options.dryRun === true
+                ? `${group.map((target) => target.id).join(', ')} would share ${assignment.root.path} but produce different files, so a least-common-denominator copy would be written. Pass --strict to make that a failure.`
+                : `${group.map((target) => target.id).join(', ')} share ${assignment.root.path} but would produce different files, so a least-common-denominator copy was written. Pass --strict to make that a failure.`,
             );
           }
         }
@@ -442,6 +449,15 @@ export async function convertSkill(options: ConvertOptions): Promise<ConversionR
           summary: plan.summary,
         });
       }
+
+      // --out always writes one directory per target, so two targets that
+      // would share a discovery root are never compared here. Saying nothing
+      // lets a multi-target --out run read as if the sharing had been checked.
+      if (multi) {
+        notes.push(
+          `--out writes one directory per target, so the shared-root check did not run: two targets that would install into the same root were not compared here. Run the same command with --install --dry-run to see that plan without writing anything.`,
+        );
+      }
     }
 
     if (options.dryRun === true) {
@@ -494,6 +510,7 @@ export async function convertSkill(options: ConvertOptions): Promise<ConversionR
       notes,
       mode: options.install === true ? 'install' : 'out',
       dryRun: options.dryRun === true,
+      unique: summariseUnique(targetReports),
       summary: summariseReport(targetReports),
     };
   } finally {

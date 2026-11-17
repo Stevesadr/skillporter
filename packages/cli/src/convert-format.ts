@@ -103,7 +103,19 @@ export function renderConvert(report: ConversionReport): string {
   }
 
   lines.push('');
-  lines.push(`  result  ${verdictFor(report)}  ·  ${tally(report.summary)}`);
+  // One target's counts are the skill's counts. Several targets' counts are
+  // not: the same five items appear once per target, so summing them reports
+  // "15 preserved" for five things. Both numbers are printed and labelled, and
+  // the unique one comes first because it answers "what is this skill made of".
+  if (report.targets.length > 1) {
+    lines.push(`  result  ${verdictFor(report)}`);
+    lines.push(`    unique items       ${tally(report.unique)}  (counted once each, not once per target)`);
+    lines.push(
+      `    per-target items   ${tally(report.summary)}  (${report.unique.items} item(s) × ${report.targets.length} targets)`,
+    );
+  } else {
+    lines.push(`  result  ${verdictFor(report)}  ·  ${tally(report.summary)}`);
+  }
   return lines.join('\n');
 }
 
@@ -202,6 +214,12 @@ export function renderConvertMarkdown(report: ConversionReport): string {
 
   const { summary } = report;
   lines.push(`**Result:** ${verdictFor(report)} — ${tally(summary)}.`);
+  if (report.targets.length > 1) {
+    lines.push('');
+    lines.push(
+      `Counted once each, the ${report.unique.items} item(s) in this skill are ${tally(report.unique)}. The line above adds one item list per target, so the same item appears once for each of the ${report.targets.length} targets.`,
+    );
+  }
   return lines.join('\n');
 }
 

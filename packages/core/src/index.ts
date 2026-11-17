@@ -75,10 +75,18 @@ export type { NamePlan, PlannedFile, PlannedSkill, PlanOptions } from './convert
 export { planSharedConversion } from './convert/lcd.js';
 export type { SharedPlanOptions } from './convert/lcd.js';
 export {
+  invocationFamily,
+  referenceMatches,
+  renderInvocation,
+  scanInvocationReferences,
+} from './invocation.js';
+export type { InvocationFamily, InvocationProfile, InvocationReference } from './invocation.js';
+export {
   ConversionError,
   exitCodeForConversion,
   summarise,
   summariseReport,
+  summariseUnique,
 } from './convert/report.js';
 export type {
   ConversionItem,
@@ -88,6 +96,7 @@ export type {
   Fidelity,
   FidelitySummary,
   OverlapReport,
+  UniqueFidelitySummary,
   RootReport,
   TargetReport,
 } from './convert/report.js';

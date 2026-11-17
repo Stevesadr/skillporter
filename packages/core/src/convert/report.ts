@@ -153,12 +153,70 @@ export interface ConversionReport {
   /** Where the output went, or would have gone. */
   mode: 'install' | 'out';
   dryRun: boolean;
+  /**
+   * The items counted once each, across every target.
+   *
+   * `summary` adds up one item list per target, so a five-item skill converted
+   * to three targets reports "15 preserved". That arithmetic is correct and
+   * reads as a lie: there are five things, not fifteen. This counts each
+   * subject once, at the worst fidelity any target gave it, so the report can
+   * say "5 unique items" next to "15 per-target items".
+   */
+  unique: UniqueFidelitySummary;
   summary: FidelitySummary;
 }
+
+/** Per-subject counts, plus how many distinct subjects there were. */
+export interface UniqueFidelitySummary extends FidelitySummary {
+  /** Distinct subjects across every target. */
+  items: number;
+}
+
+/**
+ * Fidelity, ordered from closest to the source to furthest from it.
+ *
+ * Used to collapse one subject seen by several targets into a single verdict:
+ * if one target degraded a field, the honest summary of "what happened to this
+ * field" is `degraded`, not the best case.
+ */
+const FIDELITY_SEVERITY: Fidelity[] = ['preserved', 'adapted', 'renamed', 'degraded', 'dropped'];
 
 export function summariseReport(targets: readonly TargetReport[]): FidelitySummary {
   const all = targets.flatMap((target) => target.items);
   return summarise(all);
+}
+
+/**
+ * Every subject once, at its worst fidelity.
+ *
+ * A subject is identified by its `subject` string (`field:name`, `body`,
+ * `file:scripts/x.py`), which is the same string every target uses for the same
+ * thing. Two targets can disagree about it — Codex may preserve a field that
+ * Kimi has to drop — and the merged verdict is the worse of the two.
+ */
+export function summariseUnique(targets: readonly TargetReport[]): UniqueFidelitySummary {
+  const worst = new Map<string, Fidelity>();
+  for (const target of targets) {
+    for (const item of target.items) {
+      const seen = worst.get(item.subject);
+      if (seen === undefined || FIDELITY_SEVERITY.indexOf(item.fidelity) > FIDELITY_SEVERITY.indexOf(seen)) {
+        worst.set(item.subject, item.fidelity);
+      }
+    }
+  }
+
+  const merged: UniqueFidelitySummary = {
+    preserved: 0,
+    adapted: 0,
+    renamed: 0,
+    degraded: 0,
+    dropped: 0,
+    result: 'clean',
+    items: worst.size,
+  };
+  for (const fidelity of worst.values()) merged[fidelity] += 1;
+  merged.result = merged.degraded + merged.dropped > 0 ? 'degraded' : 'clean';
+  return merged;
 }
 
 /**

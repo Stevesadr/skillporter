@@ -22,6 +22,7 @@ import {
   resolveDocumentedPath,
   resolveLimits,
   rootsFor,
+  summariseUnique,
   writeSkill,
 } from '../packages/core/dist/index.js';
 
@@ -1418,3 +1419,117 @@ test('emit: a source field keeps its raw text and loses only its trailing newlin
   // No trailing newline survives, because the caller joins fields with one.
   assert.ok(!emitField(field, 'description').endsWith('\n'));
 });
+
+test('out: a multi-target run says the shared-root check did not run', async (t) => {
+  // --out writes one directory per target, so two targets that would install
+  // into the same root are never compared. Silence here reads as "checked and
+  // fine", which is the one thing a report must never imply.
+  const dir = await sandbox(t);
+  const out = join(dir, 'out');
+
+  const result = await run(['convert', SIMPLE, '--to', 'codex,dsh,opencode', '--from', 'claude-code', '--out', out]);
+  assert.equal(result.code, 0);
+  assert.match(result.stdout, /shared-root check did not run/);
+  assert.match(result.stdout, /--install --dry-run/);
+  // And it did in fact write one directory per target.
+  assert.deepEqual(await discoverableSkills(join(out, 'codex-cli')), ['changelog-writer']);
+  assert.deepEqual(await discoverableSkills(join(out, 'opencode')), ['changelog-writer']);
+
+  // A single target has nothing to compare, so the note must not appear.
+  const single = await run(['convert', SIMPLE, '--to', 'opencode', '--from', 'claude-code', '--out', join(dir, 'one')]);
+  assert.doesNotMatch(single.stdout, /shared-root check did not run/);
+});
+
+test('install --dry-run shows the shared-root plan and writes nothing', async (t) => {
+  const dir = await sandbox(t);
+
+  const result = await run([
+    'convert',
+    resolve(ROOT, SIMPLE),
+    '--to',
+    'codex,dsh,opencode',
+    '--from',
+    'claude-code',
+    '--install',
+    '--project',
+    '--dry-run',
+  ], { cwd: dir });
+
+  assert.equal(result.code, 0);
+  // The plan: one root, listed once, serving all three.
+  assert.match(result.stdout, /\.agents\/skills {2}\[project\] {2}dry-run {2}for codex-cli, deepseek-harness, opencode/);
+  assert.match(result.stdout, /for codex-cli, deepseek-harness, opencode/);
+  assert.match(result.stdout, /one real copy serves every target listed/);
+  // And the tense has to match reality: nothing was written.
+  assert.match(result.stdout, /would be written to/);
+  assert.doesNotMatch(result.stdout, /so it was written once/);
+  assert.equal(existsSync(join(dir, '.agents')), false, '--dry-run must not create the root');
+});
+
+test('summary: unique counts and per-target counts are reported apart', async (t) => {
+  // Five items on three targets is five things, not fifteen. The report used to
+  // print only the sum, so a skill with nothing lost read as "15 preserved".
+  const dir = await sandbox(t);
+  const out = join(dir, 'out');
+
+  const result = await run(['convert', SIMPLE, '--to', 'codex,dsh,opencode', '--from', 'claude-code', '--out', out]);
+  assert.equal(result.code, 0);
+  assert.match(result.stdout, /unique items\s+5 preserved/);
+  assert.match(result.stdout, /per-target items\s+15 preserved/);
+  assert.match(result.stdout, /5 item\(s\) × 3 targets/);
+  // The unique count is the one that must not look like a per-target total.
+  assert.match(result.stdout, /counted once each, not once per target/);
+
+  // A single target's counts are already the skill's counts, so the extra
+  // breakdown would only add noise.
+  const single = await run(['convert', SIMPLE, '--to', 'opencode', '--from', 'claude-code', '--out', join(dir, 'one')]);
+  assert.equal(single.code, 0);
+  assert.match(single.stdout, /result\s+converted cleanly\s+·\s+5 preserved/);
+  assert.doesNotMatch(single.stdout, /unique items/);
+});
+
+test('summary: the machine report carries the unique counts too', async () => {
+  const report = await convert({
+    path: resolve(ROOT, SIMPLE),
+    from: 'claude-code',
+    to: ['codex-cli', 'deepseek-harness', 'opencode'],
+    dryRun: true,
+  });
+
+  assert.equal(report.summary.preserved, 15, 'the sum of every target item list');
+  assert.equal(report.unique.items, 5, 'five subjects, however many targets saw them');
+  assert.equal(report.unique.preserved, 5);
+  assert.equal(report.unique.result, 'clean');
+});
+
+test('summary: a subject two targets treat differently counts once, at the worse fidelity', () => {
+  // Codex may keep a field that another target has to drop. "What happened to
+  // this field" then has one honest answer: the worse one. Reporting the best
+  // case would hide a loss behind a target that happened to be generous.
+  const merged = summariseUnique([
+    targetWith('a', [{ subject: 'field:name', kind: 'field', fidelity: 'preserved', reason: '' }]),
+    targetWith('b', [{ subject: 'field:name', kind: 'field', fidelity: 'dropped', reason: '' }]),
+  ]);
+
+  assert.equal(merged.items, 1);
+  assert.equal(merged.dropped, 1);
+  assert.equal(merged.preserved, 0);
+  assert.equal(merged.result, 'degraded');
+});
+
+/** A TargetReport with only the fields summariseUnique reads. */
+function targetWith(id, items) {
+  return {
+    target: id,
+    displayName: id,
+    verification: 'verified',
+    layout: 'directory',
+    directoryName: 'skill',
+    destination: `/nowhere/${id}/skill`,
+    written: false,
+    items,
+    files: [],
+    lint: null,
+    summary: { preserved: 0, adapted: 0, renamed: 0, degraded: 0, dropped: 0, result: 'clean' },
+  };
+}
