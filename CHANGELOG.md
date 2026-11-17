@@ -23,9 +23,16 @@ the exit code.
   including every field the target agent would ignore, with line numbers.
 - `agents` — list the capability profiles, the roots each agent discovers, and the
   verification level of each profile.
-- `lint --for <agent>` — 25 rules derived from the target's capability profile, with
-  stable ids (SP001–SP025), per-target severities, a source URL on every finding, and
+- `lint --for <agent>` — 26 rules derived from the target's capability profile, with
+  stable ids (SP001–SP026), per-target severities, a source URL on every finding, and
   exit codes 0/1/2.
+- SP026 reports text that invokes a skill the way another agent does: a body written for
+  Claude Code says `/caveman`, and on Codex CLI the same sentence needs `$caveman`. The
+  rule reads `invocation.syntax` from the target profile, shows the syntax that target
+  documents, and never rewrites the body. A profile that records `unknown` produces no
+  finding, so an unverified syntax can never make a reference wrong.
+- Every capability profile states its invocation syntax with a source, or records
+  `unknown` and why. `docs/agents.md` shows the column.
 - `convert` — hub-and-spoke conversion through the IR, with a fidelity report that
   classifies every field and feature as `preserved`, `adapted`, `renamed`, `degraded` or
   `dropped`. `--report json` is validated against a schema.
@@ -46,6 +53,16 @@ the exit code.
 
 ### Fixed
 
+- A multi-target `convert --out` run now says the shared-root check did not run. `--out`
+  writes one directory per target, so two targets that would install into the same root
+  are never compared, and the report's silence read as "checked and fine".
+- A `--dry-run` install no longer says files "were written" while writing nothing.
+- `--to ""` names the empty flag instead of reporting `unknown agent "--from"`.
+- Short agent names (`codex`, `dsh`) are accepted wherever an id is, and `--help` lists
+  every name including the aliases. A duplicate alias is a profile load error rather than
+  last-one-wins, so it cannot silently change which profile a name resolves to.
+- A conversion to several targets no longer reports "15 preserved" for a five-item skill.
+  The report separates the unique item count from the per-target sum.
 - A skill whose frontmatter name does not satisfy the target's documented name grammar is
   now renamed to a name the target accepts, reported once as `adapted` with the rule that
   forced it. Previously the invalid name was written through and the target dropped the
