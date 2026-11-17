@@ -1457,8 +1457,15 @@ test('install --dry-run shows the shared-root plan and writes nothing', async (t
 
   assert.equal(result.code, 0);
   // The plan: one root, listed once, serving all three.
-  assert.match(result.stdout, /\.agents\/skills {2}\[project\] {2}dry-run {2}for codex-cli, deepseek-harness, opencode/);
-  assert.match(result.stdout, /for codex-cli, deepseek-harness, opencode/);
+  //
+  // The root is built with the same primitives the resolver uses, so the
+  // expectation is native on every platform. A literal '.agents/skills' cannot
+  // match on Windows, where the report prints 'D:\\...\\.agents\\skills'.
+  const rootLine = `${join(dir, '.agents', 'skills')}  [project]  dry-run  for codex-cli, deepseek-harness, opencode`;
+  assert.ok(
+    result.stdout.includes(rootLine),
+    `the plan must list the shared root as "${rootLine}", got:\n${result.stdout}`,
+  );
   assert.match(result.stdout, /one real copy serves every target listed/);
   // And the tense has to match reality: nothing was written.
   assert.match(result.stdout, /would be written to/);
