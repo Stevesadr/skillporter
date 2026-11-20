@@ -65,6 +65,25 @@ codex exec --ephemeral --sandbox read-only '$caveman What is an HTTP 304 respons
 The HTTP example returned “HTTP `304 Not Modified`: cached resource is still
 valid. Response has no body because client should reuse its cached representation.”
 
+### Before and after moving a skill from OpenCode to Codex
+
+We ran the same tasks in fresh sessions with OpenCode `1.18.18` (`big-pickle`)
+before migration and Codex CLI `0.144.6` after migration. OpenCode loaded each
+skill from `.opencode/skills/<name>/`. Skillporter `0.1.0` used
+`--from opencode --to codex-cli --install --project` to install the same directory
+under `.agents/skills/<name>/` for Codex. All 79 files matched byte for byte.
+
+| Skill and test input | Before in OpenCode | After in Codex |
+| --- | --- | --- |
+| **Caveman** · Explain why HTTP 304 has no response body. | The client reuses its stored body because it already has the cached copy. | The client or intermediary cache reuses its stored body. The 304 validates the cached copy. |
+| **[Changelog Writer](fixtures/skills/changelog-writer/SKILL.md)** · Summarize a JSON export feature, a crash fix and an internal rename labelled `skip-changelog`. | `Added` lists JSON export. `Fixed` lists the empty-directory crash fix. The rename is omitted. | The same two entries appear under `Added` and `Fixed`. The rename is omitted. |
+| **Vercel React Best Practices** · Review two independent fetches awaited in sequence. | Looked up `async-parallel` and used `Promise.all([getUser(), getPosts()])`. | Looked up the same rule and used the same `Promise.all` call. |
+
+The table summarizes the outputs from one run per task and agent. The tested
+behavior carried over in all three cases. Caveman's startup hooks were outside
+this check, and the Vercel conversion still flagged `license` and `metadata`
+with exit code `2`.
+
 ### Compatibility check
 
 Tested on macOS on 2026-11-21 with Node.js `24.5.0`, npm `11.5.1`, Codex CLI
@@ -86,9 +105,9 @@ byte-identical. Five conversions exited `0` and three exited `2`. All eight had
 lint warnings and zero lint errors. A separate `--strict` run of Ultracave to
 Codex exited `1` before writing the skill. The published CLI reports `0.1.0`
 with `--version`, but its JSON conversion reports label `tool.version` as `0.0.0`.
-Live model checks covered Caveman in Codex. Claude Code served as the source
-format, and the Skill Creator scripts were only checked for file preservation
-and their CLI dependency.
+For the Claude Code-format conversions in this table, the live model check
+covered Caveman in Codex. The Skill Creator scripts were checked for file
+preservation and their CLI dependency.
 
 ### Help test and improve Skillporter
 
