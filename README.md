@@ -2,13 +2,39 @@
 
 Convert AI agent skills between agent formats — and get an honest report of what changed.
 
-> **Status: alpha. Experimental, pre-1.0.** The IR, the parsers, `inspect`, `agents`, `lint`
+> **v0.1.0 public alpha. Experimental, pre-1.0.** The IR, the parsers, `inspect`, `agents`, `lint`
 > and `convert` work and are tested on Linux, macOS and Windows, but nothing here is frozen:
 > the command surface, the report format and the lint rule ids may all change before 1.0,
 > and a change to a capability profile can make a conversion report differently without any
 > code changing. Do not build a pipeline that depends on exit code 2 without pinning a
-> version. The package is not published yet. See [Honest limitations](#honest-limitations)
+> version. See [Honest limitations](#honest-limitations)
 > for what is not known, and [Roadmap](#roadmap) for what is planned.
+
+## Quick start
+
+Requires Node.js 22.20.0 or newer. Install the version used by these examples:
+
+```bash
+npm install --global skillporter@0.1.0
+skillporter --version
+skillporter agents
+```
+
+Preview a Claude Code skill conversion to Codex CLI:
+
+```bash
+skillporter convert ./.claude/skills/my-skill --from claude-code --to codex-cli --dry-run
+```
+
+Review the fidelity report, then install from the Codex project directory:
+
+```bash
+skillporter convert ./.claude/skills/my-skill --from claude-code --to codex-cli --install --project
+```
+
+Codex discovers the converted skill under `.agents/skills/my-skill`. Open Codex
+in the project and invoke it as `$my-skill`. Exit code `2` means the conversion
+has losses. Add `--strict` to reject those losses before writing.
 
 ## Commands
 
@@ -315,7 +341,7 @@ silence is the enemy.
 - **Claude Code has two surfaces and both are targets, with different evidence behind them.**
   Local `.claude/skills` directories are `verified` and accept every field. The upload form
   (claude.ai / the Skills API) is a separate profile, `claude-ai-upload`, and it is only
-  `partial`: the documentation states that `name` and `description` are required and gives
+  `partial` pending an end-to-end upload test. The documentation states that `name` and `description` are required and gives
   their rules, but it does **not** say whether `license`, `compatibility`, `metadata` or
   `allowed-tools` are accepted. Those four are therefore dropped and reported, rather than
   emitted on the assumption that the upload will tolerate them. If you can show, from an

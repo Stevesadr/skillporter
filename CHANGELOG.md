@@ -11,8 +11,9 @@ may start failing on exit code 2.
 
 ## [Unreleased]
 
-**Alpha, pre-1.0.** Nothing has been published yet, and this entry describes the first
-release. Until 1.0 the command surface, the JSON report format and the lint rule ids may
+## [0.1.0] - 2026-11-20
+
+**First public alpha.** Until 1.0 the command surface, the JSON report format and the lint rule ids may
 change without a major-version bump, and a capability-profile correction can change how a
 skill is reported without any code changing. Pin an exact version if a pipeline depends on
 the exit code.
@@ -52,6 +53,12 @@ the exit code.
 - `docs/agents.md` is generated from the profiles; CI fails if it has drifted.
 
 ### Fixed
+
+- Omitted bundled files appear by path and reason in the conversion report.
+- Conversion checks every destination before writing. `--strict` rejects planned losses
+  and staged lint errors before changing any destination.
+- Replacements are staged in full before the old copy is moved. If a destination write
+  fails, the report identifies completed, failed and unattempted destinations.
 
 - A multi-target `convert --out` run now says the shared-root check did not run. `--out`
   writes one directory per target, so two targets that would install into the same root
@@ -97,7 +104,7 @@ the exit code.
 ### Known limitations of this release
 
 - The Claude.ai / Skills API upload profile is `partial`. Its name and description rules
-  are documented; whether it accepts `license`, `compatibility`, `metadata` and
+  are documented. Live upload remains unverified. Whether it accepts `license`, `compatibility`, `metadata` and
   `allowed-tools` is not, so those are dropped rather than guessed at.
 - Codex CLI's name grammar, OpenCode's and Kimi Code's symlink handling, and the flow body
   format are `unknown`. The converter reports a warning instead of assuming.

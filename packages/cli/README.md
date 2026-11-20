@@ -16,10 +16,19 @@ not understood by the target.
 ## Install
 
 ```bash
-npm install --global skillporter
+npm install --global skillporter@0.1.0
+skillporter agents
 ```
 
-Requires Node 22.20.0 or newer.
+Requires Node 22.20.0 or newer. Preview a conversion and review its report:
+
+```bash
+skillporter convert ./my-skill --from claude-code --to codex-cli --dry-run
+```
+
+Use `--install --project` in place of `--dry-run` to write into the project's
+`.agents/skills` directory. The Claude.ai upload profile is partial pending live
+upload verification.
 
 ## Commands
 
@@ -51,7 +60,7 @@ report-builder  ·  ./my-skill
 ```
 
 `inspect` reads; it never writes and never executes. `lint --for <agent>` reports what that
-target would do with the skill, from a 25-rule catalogue. `convert` writes to a new directory
+target would do with the skill, from a 26-rule catalogue. `convert` writes to a new directory
 or installs into a discovered root. Each replacement is staged before the
 previous copy is moved aside. `--strict` rejects planned losses or staged lint
 errors before changing any destination. If a write fails after preflight, the

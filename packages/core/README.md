@@ -10,7 +10,7 @@ does and does not understand.
 ## Install
 
 ```bash
-npm install @skillporter/core
+npm install @skillporter/core@0.1.0
 ```
 
 Requires Node 22.20.0 or newer.
