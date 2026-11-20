@@ -36,6 +36,74 @@ Codex discovers the converted skill under `.agents/skills/my-skill`. Open Codex
 in the project and invoke it as `$my-skill`. Exit code `2` means the conversion
 has losses. Add `--strict` to reject those losses before writing.
 
+## Live demo with Caveman on Codex
+
+Start in a fresh directory. This demo uses the published CLI and a pinned copy
+of the upstream [Caveman skill](https://github.com/JuliusBrussee/caveman/tree/a192894723a8f47e7f504c7b5041967ff1f18e55/skills/caveman).
+
+```bash
+npm install --global @skillporter/cli@0.1.0
+git init caveman-source
+git -C caveman-source fetch --depth 1 https://github.com/JuliusBrussee/caveman.git a192894723a8f47e7f504c7b5041967ff1f18e55
+git -C caveman-source checkout --detach FETCH_HEAD
+git init codex-demo
+cd codex-demo
+skillporter convert ../caveman-source/skills/caveman --from claude-code --to codex-cli --install --project
+diff -qr ../caveman-source/skills/caveman .agents/skills/caveman
+codex exec --ephemeral --sandbox read-only '$caveman What is an HTTP 304 response? Mention the status code and why the response has no body.'
+```
+
+- **Files preserved.** `SKILL.md` and `README.md` matched the source byte for byte
+  under `.agents/skills/caveman/`.
+- **Invocation to review.** The conversion exited `0` with lint warning `SP026`
+  for references such as `/caveman` and `/caveman-compress`. Use `$caveman` in Codex.
+- **Plugin behavior to review.** Automatic activation and hook-backed mode tracking
+  require [Caveman's host-specific hooks](https://github.com/JuliusBrussee/caveman/blob/a192894723a8f47e7f504c7b5041967ff1f18e55/docs/technical/skills-hooks-and-plugins.md)
+  outside the converted directory. In a fresh Codex session, an explicit `$caveman`
+  status request returned `Caveman mode: off (not tracked by this host)`.
+
+The HTTP example returned “HTTP `304 Not Modified`: cached resource is still
+valid. Response has no body because client should reuse its cached representation.”
+
+### Compatibility check
+
+Tested on macOS on 2026-11-21 with Node.js `24.5.0`, npm `11.5.1`, Codex CLI
+`0.144.6` and OpenCode `1.18.18`. A fresh install from the public npm registry
+resolved both `@skillporter/cli` and `@skillporter/core` to `0.1.0` and listed
+all six profiles. Each upstream directory was converted with `--from claude-code`
+and installed into a fresh project for its target. Discovery was verified by path
+with Codex's `skills/list` and `opencode debug skill --pure`.
+
+| Upstream skill at the tested revision | Identical files per target | Codex exit | OpenCode exit | Behavior to review |
+| --- | ---: | ---: | ---: | --- |
+| [Caveman](https://github.com/JuliusBrussee/caveman/tree/a192894723a8f47e7f504c7b5041967ff1f18e55/skills/caveman) | 2/2 | 0 | 0 | Host hooks are outside the skill directory. |
+| [Ultracave](https://github.com/JuliusBrussee/caveman/tree/a192894723a8f47e7f504c7b5041967ff1f18e55/skills/ultracave) | 2/2 | 2 | 0 | The Codex report marked `disable-model-invocation` as degraded. To keep invocation manual, review setting `policy.allow_implicit_invocation` to `false` in `agents/openai.yaml`. OpenCode documents support for the original field. |
+| [Anthropic Skill Creator](https://github.com/anthropics/skills/tree/e4bb5d960d87126ff3b3a8af1a104b7db67560ba/skills/skill-creator) | 18/18 | 0 | 0 | The evaluation and description-tuning scripts still call `claude -p`. Running them requires a working Claude Code setup or a port to the target CLI. |
+| [Vercel React Best Practices](https://github.com/vercel-labs/agent-skills/tree/5a37a6329fbad3666c3207392a6a7c0110e92efb/skills/react-best-practices) | 76/76 | 2 | 2 | Both reports flagged target handling of `license` and `metadata`. Both fields stayed in `SKILL.md`. |
+
+**8/8** installs succeeded and were discovered, with **196/196** file copies
+byte-identical. Five conversions exited `0` and three exited `2`. All eight had
+lint warnings and zero lint errors. A separate `--strict` run of Ultracave to
+Codex exited `1` before writing the skill. The published CLI reports `0.1.0`
+with `--version`, but its JSON conversion reports label `tool.version` as `0.0.0`.
+Live model checks covered Caveman in Codex. Claude Code served as the source
+format, and the Skill Creator scripts were only checked for file preservation
+and their CLI dependency.
+
+### Help test and improve Skillporter
+
+Try migrating one skill you use and report the outcome in
+[GitHub Issues](https://github.com/Stevesadr/skillporter/issues). Include the
+Skillporter version, source and target agent versions, and the skill revision.
+For an incompatibility, include a minimal `SKILL.md` and any required companion
+files, the exact command, and the expected and actual results. The first round
+tracks reported successful migrations and reproducible incompatibilities.
+
+If you want to contribute a pull request, reproduce the JSON report version
+mismatch, check how a target agent handles a field marked `unknown`, or add a
+small fixture for a real migration edge case. See the
+[contribution guide](CONTRIBUTING.md) for profile evidence and test commands.
+
 ## Commands
 
 ```bash
