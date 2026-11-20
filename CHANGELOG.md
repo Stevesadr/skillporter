@@ -20,6 +20,8 @@ the exit code.
 
 ### Added
 
+- Install the command-line package as `@skillporter/cli`. It provides the `skillporter` command.
+
 - `inspect` — parse a skill into the intermediate representation and show what was found,
   including every field the target agent would ignore, with line numbers.
 - `agents` — list the capability profiles, the roots each agent discovers, and the

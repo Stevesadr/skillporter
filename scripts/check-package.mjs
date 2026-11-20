@@ -94,8 +94,8 @@ try {
   if (install.status !== 0) fail(`installing the tarballs failed\n${install.stderr}`);
   ok('installed both tarballs into an empty project');
 
-  const cli = join(app, 'node_modules', 'skillporter', 'dist', 'index.js');
-  if (!existsSync(cli)) fail('node_modules/skillporter/dist/index.js is missing after install');
+  const cli = join(app, 'node_modules', '@skillporter', 'cli', 'dist', 'index.js');
+  if (!existsSync(cli)) fail('node_modules/@skillporter/cli/dist/index.js is missing after install');
 
   function run(args) {
     const result = spawnSync(process.execPath, [cli, ...args], { cwd: app, encoding: 'utf8' });

@@ -15,7 +15,7 @@ Convert AI agent skills between agent formats — and get an honest report of wh
 Requires Node.js 22.20.0 or newer. Install the version used by these examples:
 
 ```bash
-npm install --global skillporter@0.1.0
+npm install --global @skillporter/cli@0.1.0
 skillporter --version
 skillporter agents
 ```

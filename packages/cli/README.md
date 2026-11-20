@@ -16,7 +16,7 @@ not understood by the target.
 ## Install
 
 ```bash
-npm install --global skillporter@0.1.0
+npm install --global @skillporter/cli@0.1.0
 skillporter agents
 ```
 

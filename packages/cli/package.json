@@ -1,5 +1,5 @@
 {
-  "name": "skillporter",
+  "name": "@skillporter/cli",
   "version": "0.1.0",
   "description": "Convert AI agent skills between agent formats, with an explicit fidelity report for everything that is lost.",
   "license": "Apache-2.0",
@@ -29,7 +29,7 @@
     "node": ">=22.20.0"
   },
   "bin": {
-    "skillporter": "./dist/index.js"
+    "skillporter": "dist/index.js"
   },
   "main": "./dist/index.js",
   "files": [

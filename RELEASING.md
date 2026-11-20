@@ -16,9 +16,9 @@ Two packages, from one repository:
 | Package | Directory | Contents | Why it is separate |
 | --- | --- | --- | --- |
 | `@skillporter/core` | `packages/core` | the parsers, IR, linter, emitters, plus `agents/` and `schema/` | usable as a library without the CLI |
-| `skillporter` | `packages/cli` | `dist/` only, a thin `commander` front end | the command users install |
+| `@skillporter/cli` | `packages/cli` | `dist/` only, a thin `commander` front end | the command users install |
 
-`skillporter` depends on `@skillporter/core`. That single fact drives the publish order and most
+`@skillporter/cli` depends on `@skillporter/core`. That single fact drives the publish order and most
 of the rollback advice below.
 
 ## One-time setup
@@ -27,19 +27,9 @@ Do these once, before the first release. Nothing here is needed again afterwards
 
 ### 1. Own the names
 
-Two different names have to be yours:
-
-- **`skillporter`** (unscoped) — needs an npm **user account** called `skillporter`, or an
-  account that has been granted the name.
-- **`@skillporter`** (scope) — needs a **user or organisation** named `skillporter`. npm grants
-  a scope that matches your user or organisation name: *"When you sign up for an npm user
-  account or create an organization, you are granted a scope that matches your user or
-  organization name."* To publish under an organisation scope, *"you must create an npm user
-  account, then create an npm organization."*
-
-Both were unclaimed as of 2026-11-15 (`npm view skillporter` and `npm view @skillporter/core`
-both return 404). Claiming them is a browser task on npmjs.com — there is no CLI command that
-reserves a name without publishing to it.
+Both packages publish to the npm organization scope `@skillporter`. Use an account
+with publishing access in that organization. The CLI package is `@skillporter/cli`
+and provides the `skillporter` command.
 
 ### 2. Enable 2FA
 
@@ -59,7 +49,7 @@ account-identity or account-governance actions, so it is a publishing credential
 
 - Node **22.20.0** or newer (both packages declare `engines.node: >=22.20.0`).
 - npm **9.5.0** or newer — the floor for provenance support, should you add it later.
-- `npm whoami` must return the account that owns both names.
+- `npm whoami` must return the account that has publishing access to both packages.
 
 ## Release procedure
 
@@ -116,7 +106,7 @@ drifted from the data it is generated from — if either fails, run `npm run age
 
 ```bash
 npm pack --dry-run --workspace @skillporter/core
-npm pack --dry-run --workspace skillporter
+npm pack --dry-run --workspace @skillporter/cli
 ```
 
 Check, every time, without assuming last release's result carries over:
@@ -164,10 +154,7 @@ npm publish --access public
 ```
 
 `--access public` is already in `publishConfig`, so the flag is belt and braces. It matters
-because *"By default, scoped packages are published with private visibility"* — without it, a
-scoped package goes up private and nobody can install it. (The unscoped CLI package cannot be
-restricted at all: *"Unscoped packages are always public"* and *"Unscoped packages cannot be set
-to `restricted`"*.)
+because scoped packages default to private visibility.
 
 npm will prompt for a one-time password. `--otp <code>` supplies it non-interactively.
 
@@ -179,7 +166,7 @@ npm view @skillporter/core dist.tarball
 npm pack @skillporter/core@0.1.0 --dry-run     # in an empty directory
 ```
 
-This pause is the point of the ordering. Once `skillporter` is published with
+This pause is the point of the ordering. Once `@skillporter/cli` is published with
 `@skillporter/core` in its `dependencies`, the registry sees core as a package that another
 package depends on, and that removes the fast route to unpublishing core (see
 [Rolling back](#rolling-back)). Confirm core is right while it is still cheap to be wrong.
@@ -192,16 +179,16 @@ npm publish --access public --dry-run
 npm publish --access public
 ```
 
-If you skip straight to this step, `npm install -g skillporter` fails to resolve its dependency
+If you skip straight to this step, `npm install -g @skillporter/cli` fails to resolve its dependency
 for however long core is missing — a broken window that is entirely avoidable.
 
 ### Step 10 — Check the published result
 
 ```bash
-npm view skillporter version
-npm view skillporter dependencies      # @skillporter/core must resolve to a published version
-npx --yes skillporter@0.1.0 --version
-npx --yes skillporter@0.1.0 agents
+npm view @skillporter/cli version
+npm view @skillporter/cli dependencies      # @skillporter/core must resolve to a published version
+npx --yes @skillporter/cli@0.1.0 --version
+npx --yes @skillporter/cli@0.1.0 agents
 ```
 
 The last command should list six agents. If it prints an empty list or throws, the profiles did
@@ -241,7 +228,7 @@ Two unrelated kinds of tag exist, and confusing them causes real mistakes:
 - **Git tags** (`git tag v0.1.0`) mark a commit. They are what this repository uses, and they
   publish nothing by themselves.
 - **npm dist-tags** (`latest`, `next`) are pointers to a version *inside the registry*. `latest`
-  is what `npm install skillporter` resolves to.
+  is what `npm install @skillporter/cli` resolves to.
 
 A publish sets `latest` to the version just published, unless you pass `--tag`. So a prerelease
 must say so:
@@ -256,8 +243,8 @@ ranges will be rejected"* — so `v1.4` is not a valid tag name while `next` and
 Moving `latest` back to an earlier version, without publishing anything:
 
 ```bash
-npm dist-tag add skillporter@0.1.0 latest
-npm dist-tag ls skillporter
+npm dist-tag add @skillporter/cli@0.1.0 latest
+npm dist-tag ls @skillporter/cli
 ```
 
 ## Rolling back
@@ -282,14 +269,14 @@ auth-and-writes.
 The right tool when the version should stay installable but should not be chosen:
 
 ```bash
-npm deprecate skillporter@0.1.0 "0.1.0 loses the body of any skill with CRLF line endings; use 0.1.1"
+npm deprecate @skillporter/cli@0.1.0 "0.1.0 loses the body of any skill with CRLF line endings; use 0.1.1"
 npm deprecate "@skillporter/core@0.1.0" "broken; use 0.1.1"
 ```
 
 It takes a version range as well as a version, and *"SemVer ranges passed to this command are
 interpreted such that they **do** include prerelease versions"*. You must be an owner.
 Deprecation prints your message on install and on the package page, and does not remove the
-tarball. Undo it by passing an empty message: `npm deprecate skillporter@0.1.0 ""`.
+tarball. Undo it by passing an empty message: `npm deprecate @skillporter/cli@0.1.0 ""`.
 
 Deprecating an entire package — rather than one version — *"will be dropped from our search
 results"*, so prefer the version-scoped form.
@@ -304,8 +291,8 @@ After 72 hours, unpublishing requires **all** of: no dependents in the registry,
 downloads in the last week, and a single owner.
 
 ```bash
-npm unpublish skillporter@0.1.0
-npm unpublish skillporter --force          # every version, needs --force
+npm unpublish @skillporter/cli@0.1.0
+npm unpublish @skillporter/cli --force          # every version, needs --force
 ```
 
 Three consequences to plan around:
@@ -317,7 +304,7 @@ Three consequences to plan around:
   not publish any new versions of that package until 24 hours have passed."*
 
 And the trap specific to this repository: **publishing the CLI removes core's escape hatch.**
-Once `skillporter@0.1.0` exists with `@skillporter/core` in its dependencies, core has a
+Once `@skillporter/cli@0.1.0` exists with `@skillporter/core` in its dependencies, core has a
 dependent in the registry, and neither the 72-hour rule nor the post-72-hour rule applies to it
 any more. That is why [step 8](#step-8--verify-core-before-publishing-the-cli) verifies core
 before the CLI goes up. If core is broken and already has a dependent, deprecate it and ship a

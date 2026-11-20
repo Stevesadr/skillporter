@@ -1,6 +1,6 @@
 # @skillporter/core
 
-The engine behind [`skillporter`](https://www.npmjs.com/package/skillporter): parse an agent
+The engine behind [`skillporter`](https://www.npmjs.com/package/@skillporter/cli): parse an agent
 skill into a source-faithful intermediate representation, and know what every target agent
 does and does not understand.
 
@@ -44,7 +44,7 @@ engine.
 
 ## Links
 
-- [The CLI](https://www.npmjs.com/package/skillporter)
+- [The CLI](https://www.npmjs.com/package/@skillporter/cli)
 - [Source, documentation and the supported-agent matrix](https://github.com/Stevesadr/skillporter)
 - [Capability profiles, with a source URL for every claim](https://github.com/Stevesadr/skillporter/blob/main/docs/agents.md)
 
