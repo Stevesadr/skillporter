@@ -1,7 +1,7 @@
-import { chmod, mkdir, rename, rm, stat, writeFile } from 'node:fs/promises';
-import { basename, dirname, join, resolve } from 'node:path';
-import { randomBytes } from 'node:crypto';
-import { isInside } from './paths.js';
+import { access, chmod, lstat, mkdir, mkdtemp, realpath, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { constants, type Stats } from 'node:fs';
+import { basename, dirname, join, relative, resolve } from 'node:path';
+import { checkSafeRelativePath, isInside } from './paths.js';
 import { ConversionError } from './convert/report.js';
 
 export interface FileToWrite {
@@ -19,6 +19,7 @@ export interface WriteSkillOptions {
   files: readonly FileToWrite[];
   /** Replace an existing skill without asking. */
   force: boolean;
+  strict?: boolean;
   /**
    * Asked once when the destination exists and `force` is not set. Returning
    * false aborts. When no handler is given, an existing destination is an error:
@@ -44,32 +45,55 @@ function stamp(now: Date): string {
   return now.toISOString().replace(/[:.]/g, '-');
 }
 
-async function exists(path: string): Promise<boolean> {
-  return stat(path).then(
-    () => true,
-    () => false,
-  );
+async function entry(path: string): Promise<Stats | undefined> {
+  try {
+    return await lstat(path);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
+    throw error;
+  }
 }
 
-/**
- * Write a skill directory atomically.
- *
- * The whole directory is built in a temporary directory inside the root and
- * renamed into place in one step, so an interrupted run never leaves a
- * half-written skill behind. An existing copy is moved aside first — by rename,
- * not by delete, so replacing never depends on being allowed to delete anything
- * — and that move is the backup. A backup lives outside the root, so it can
- * never be discovered as a skill.
- */
-export async function writeSkill(options: WriteSkillOptions): Promise<WriteSkillResult> {
+async function checkWritableDirectory(path: string): Promise<string> {
+  let current = path;
+  while ((await entry(current)) === undefined) current = dirname(current);
+  if (!(await stat(current)).isDirectory()) {
+    throw new ConversionError(`${current} is not a directory`);
+  }
+  await access(current, constants.W_OK | constants.X_OK);
+  return resolve(await realpath(current), relative(current, path));
+}
+
+export async function prepareSkillWrite(options: WriteSkillOptions): Promise<{
+  destination: string;
+  commit: () => Promise<WriteSkillResult>;
+}> {
   const root = resolve(options.root);
   const destination = resolve(root, options.directoryName);
 
-  if (!isInside(root, destination)) {
+  if (!isInside(root, destination) || dirname(destination) !== root) {
     throw new ConversionError(`refusing to write to ${destination}: it is outside the target root ${root}`);
   }
 
-  const alreadyThere = await exists(destination);
+  const paths = new Set<string>();
+  for (const file of options.files) {
+    const path = join(destination, ...file.path.split('/'));
+    if (!checkSafeRelativePath(file.path).ok || !isInside(destination, path) || path === destination) {
+      throw new ConversionError(`refusing to write ${file.path}: it escapes the skill directory`);
+    }
+    const key = process.platform === 'win32' ? path.toLowerCase() : path;
+    if (paths.has(key)) throw new ConversionError(`duplicate output file: ${file.path}`);
+    paths.add(key);
+  }
+  for (const path of paths) {
+    for (let parent = dirname(path); isInside(destination, parent) && parent !== destination; parent = dirname(parent)) {
+      if (paths.has(parent)) throw new ConversionError(`output file conflicts with a directory: ${parent}`);
+    }
+  }
+
+  const realRoot = await checkWritableDirectory(root);
+  const previous = await entry(destination);
+  const alreadyThere = previous !== undefined;
   if (alreadyThere && !options.force) {
     const confirmed = options.confirm === undefined ? false : await options.confirm(destination);
     if (!confirmed) {
@@ -80,68 +104,82 @@ export async function writeSkill(options: WriteSkillOptions): Promise<WriteSkill
     }
   }
 
-  // Where the old copy goes. A backup is kept and reported; a build artifact is
-  // discarded. Either way it is outside the root, so a leftover cannot be read
-  // back as a skill.
-  const stampName = `${basename(root)}-${stamp(options.now ?? new Date())}`;
-  const asideRoot =
-    options.backup === false
-      ? join(dirname(root), '.skillporter-trash', stampName)
-      : join(dirname(root), '.skillporter-backups', stampName);
-  const aside = join(asideRoot, options.directoryName);
+  const asideParent = join(dirname(root), options.backup === false ? '.skillporter-trash' : '.skillporter-backups');
+  if (alreadyThere) await checkWritableDirectory(asideParent);
 
-  let backup: string | undefined;
-  if (alreadyThere) {
-    await mkdir(asideRoot, { recursive: true });
-    await rename(destination, aside);
-    if (options.backup !== false) backup = aside;
-  }
-
-  const staging = join(root, `.skillporter-tmp-${randomBytes(6).toString('hex')}`, options.directoryName);
-  await mkdir(staging, { recursive: true });
-
-  const modeFailures: string[] = [];
-  try {
-    for (const file of options.files) {
-      const target = join(staging, ...file.path.split('/'));
-      if (!isInside(staging, target)) {
-        throw new ConversionError(`refusing to write ${file.path}: it escapes the skill directory`);
-      }
-      await mkdir(dirname(target), { recursive: true });
-      await writeFile(target, file.bytes);
-      if (file.mode !== 0) {
-        try {
-          await chmod(target, file.mode);
-        } catch {
-          modeFailures.push(file.path);
-        }
-      }
-    }
+  async function commit(): Promise<WriteSkillResult> {
+    await mkdir(root, { recursive: true });
+    const stagingParent = await mkdtemp(join(root, '.skillporter-tmp-'));
+    const staging = join(stagingParent, basename(destination));
+    const modeFailures: string[] = [];
+    let asideDirectory: string | undefined;
+    let backup: string | undefined;
+    let movedAside = false;
+    let installed = false;
 
     try {
-      await rename(staging, destination);
-    } catch (error) {
-      // Put the old copy back rather than leave the root without the skill it
-      // had before this call.
-      if (alreadyThere) await rename(aside, destination).catch(() => undefined);
-      throw error;
+      await mkdir(staging);
+      for (const file of options.files) {
+        const target = join(staging, ...file.path.split('/'));
+        await mkdir(dirname(target), { recursive: true });
+        await writeFile(target, file.bytes, { flag: 'wx' });
+        if (file.mode !== 0) {
+          try {
+            await chmod(target, file.mode);
+          } catch (error) {
+            if (options.strict === true) throw error;
+            modeFailures.push(file.path);
+          }
+        }
+      }
+
+      const current = await entry(destination);
+      if (current?.ino !== previous?.ino || current?.dev !== previous?.dev) {
+        throw new ConversionError(`${destination} changed after preflight`);
+      }
+      if (alreadyThere) {
+        await mkdir(asideParent, { recursive: true });
+        asideDirectory = await mkdtemp(join(asideParent, `${basename(root)}-${stamp(options.now ?? new Date())}-`));
+        backup = join(asideDirectory, basename(destination));
+        await rename(destination, backup);
+        movedAside = true;
+      }
+
+      try {
+        await rename(staging, destination);
+        installed = true;
+      } catch (error) {
+        if (movedAside && backup !== undefined) {
+          try {
+            await rename(backup, destination);
+            movedAside = false;
+          } catch (restoreError) {
+            throw new ConversionError(`could not replace ${destination}: ${String(error)}. Previous copy is at ${backup}. Automatic restoration failed: ${String(restoreError)}`);
+          }
+        }
+        throw error;
+      }
+
+      return {
+        destination,
+        ...(backup === undefined || options.backup === false ? {} : { backup }),
+        replaced: alreadyThere,
+        modeFailures,
+      };
+    } finally {
+      await rm(stagingParent, { recursive: true, force: true }).catch(() => undefined);
+      if (asideDirectory !== undefined && (!movedAside || (installed && options.backup === false))) {
+        await rm(asideDirectory, { recursive: true, force: true }).catch(() => undefined);
+      }
     }
-  } finally {
-    await rm(dirname(staging), { recursive: true, force: true }).catch(() => undefined);
   }
 
-  // A build artifact is not worth keeping. A backup is: it stays until the user
-  // removes it.
-  if (alreadyThere && options.backup === false) {
-    await rm(asideRoot, { recursive: true, force: true }).catch(() => undefined);
-  }
+  return { destination: join(realRoot, basename(destination)), commit };
+}
 
-  return {
-    destination,
-    ...(backup === undefined ? {} : { backup }),
-    replaced: alreadyThere,
-    modeFailures,
-  };
+/** Build the complete replacement before moving the previous copy aside. */
+export async function writeSkill(options: WriteSkillOptions): Promise<WriteSkillResult> {
+  return (await prepareSkillWrite(options)).commit();
 }
 
 /**
@@ -157,7 +195,6 @@ export async function writeSkillToOutput(
   options: { force: boolean; confirm?: (destination: string) => Promise<boolean>; now?: Date },
 ): Promise<WriteSkillResult> {
   const root = resolve(outDir);
-  await mkdir(root, { recursive: true });
   return writeSkill({
     root,
     directoryName,

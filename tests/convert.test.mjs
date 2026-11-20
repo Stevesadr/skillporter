@@ -2,12 +2,15 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { existsSync } from 'node:fs';
+import fs from 'node:fs/promises';
+import { syncBuiltinESMExports } from 'node:module';
 import { chmod, mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { zipSync, strToU8 } from 'fflate';
 import Ajv2020 from 'ajv/dist/2020.js';
 import { parse as parseYaml } from 'yaml';
+import { renderConvert, renderConvertMarkdown } from '../packages/cli/dist/convert-format.js';
 
 import {
   applyShellPolicy,
@@ -1066,6 +1069,7 @@ test('cli: convert honours the documented exit codes', async (t) => {
     '--strict',
   ]);
   assert.equal(strict.code, 1, strict.stderr);
+  assert.equal(existsSync(join(out, 'strict')), false);
 });
 
 test('cli: --dry-run writes nothing and still reports', async (t) => {
@@ -1540,3 +1544,138 @@ function targetWith(id, items) {
     summary: { preserved: 0, adapted: 0, renamed: 0, degraded: 0, dropped: 0, result: 'clean' },
   };
 }
+
+
+test('conversion reports each omitted file by name and reason, and strict preserves existing destinations', async (t) => {
+  const workspace = await sandbox(t);
+  const source = join(workspace, 'source');
+  const out = join(workspace, 'out');
+  await mkdir(source);
+  await writeFile(join(source, 'SKILL.md'), '---\nname: example\ndescription: Example skill\n---\nExample body\n');
+  for (const file of ['a.txt', 'b.txt', 'c.txt']) await writeFile(join(source, file), file);
+
+  const options = {
+    path: source, from: 'claude-code', to: ['codex-cli', 'claude-code'], out, limits: { maxFiles: 1 },
+  };
+  const dryRun = await convert({ ...options, dryRun: true });
+  for (const target of dryRun.targets) {
+    const dropped = target.items.filter((item) => item.fidelity === 'dropped');
+    assert.deepEqual(dropped.map((item) => item.subject), ['file:b.txt', 'file:c.txt']);
+    for (const item of dropped) assert.match(item.reason, /tool limit of 1 files/);
+  }
+
+  const existing = dryRun.targets[0].destination;
+  await mkdir(existing, { recursive: true });
+  await writeFile(join(existing, 'SKILL.md'), 'previous version');
+  const result = await convert({ ...options, force: true, strict: true });
+  assert.equal(exitCodeForConversion(result, true), 1);
+  assert.ok(result.targets.every((target) => !target.written && target.skipped.includes('--strict')));
+  assert.equal(await read(join(existing, 'SKILL.md')), 'previous version');
+  assert.equal(existsSync(dryRun.targets[1].destination), false);
+});
+
+test('preflight detects a later blocked output before writing the first destination', async (t) => {
+  const out = await sandbox(t);
+  await writeFile(join(out, 'claude-code'), 'blocked by a regular file');
+  await assert.rejects(() => convert({
+    path: resolve(ROOT, SIMPLE), from: 'claude-code', to: ['codex-cli', 'claude-code'], out,
+  }), /not a directory/);
+  assert.equal(existsSync(join(out, 'codex-cli')), false);
+  assert.equal(await read(join(out, 'claude-code')), 'blocked by a regular file');
+});
+
+test('replacement retains the old version during staging and restores it if the final rename fails', async (t) => {
+  const root = await sandbox(t);
+  const destination = join(root, 'example');
+  const existing = join(destination, 'SKILL.md');
+  await mkdir(destination);
+  await writeFile(existing, 'previous version');
+  const options = {
+    root, directoryName: 'example', force: true,
+    files: [{ path: 'SKILL.md', bytes: Buffer.from('replacement'), mode: 0 }],
+  };
+
+  const write = fs.writeFile;
+  const writeMock = t.mock.method(fs, 'writeFile', async () => {
+    assert.equal(await read(existing), 'previous version');
+    throw new Error('staging write failed');
+  });
+  syncBuiltinESMExports();
+  try {
+    await assert.rejects(() => writeSkill(options), /staging write failed/);
+  } finally {
+    writeMock.mock.restore();
+    syncBuiltinESMExports();
+  }
+  assert.equal(fs.writeFile, write);
+  assert.equal(await read(existing), 'previous version');
+
+  const rename = fs.rename;
+  const renameMock = t.mock.method(fs, 'rename', async (from, to) => {
+    if (to === destination && from.includes('.skillporter-tmp-')) {
+      assert.equal(await read(join(from, 'SKILL.md')), 'replacement');
+      throw new Error('final rename failed');
+    }
+    return rename(from, to);
+  });
+  syncBuiltinESMExports();
+  try {
+    await assert.rejects(() => writeSkill(options), /final rename failed/);
+  } finally {
+    renameMock.mock.restore();
+    syncBuiltinESMExports();
+  }
+  assert.equal(await read(existing), 'previous version');
+
+  const restoreMock = t.mock.method(fs, 'rename', async (from, to) => {
+    if (to === destination) throw new Error('destination became unavailable');
+    return rename(from, to);
+  });
+  syncBuiltinESMExports();
+  try {
+    await assert.rejects(() => writeSkill(options), (error) => {
+      const backup = /Previous copy is at (.+)\. Automatic restoration failed/.exec(error.message)?.[1];
+      assert.ok(backup);
+      assert.equal(existsSync(join(backup, 'SKILL.md')), true);
+      return true;
+    });
+  } finally {
+    restoreMock.mock.restore();
+    syncBuiltinESMExports();
+  }
+});
+
+test('a runtime write failure reports written, failed, and unattempted destinations', async (t) => {
+  const out = await sandbox(t);
+  const rename = fs.rename;
+  const failure = join(out, 'claude-code', 'changelog-writer');
+  const renameMock = t.mock.method(fs, 'rename', async (from, to) => {
+    if (to === failure) throw new Error('injected destination failure');
+    return rename(from, to);
+  });
+  syncBuiltinESMExports();
+  let report;
+  try {
+    report = await convert({
+      path: resolve(ROOT, SIMPLE), from: 'claude-code', to: ['codex-cli', 'claude-code', 'opencode'], out,
+    });
+  } finally {
+    renameMock.mock.restore();
+    syncBuiltinESMExports();
+  }
+  assert.equal(exitCodeForConversion(report, false), 1);
+  assert.deepEqual(report.targets.map(({ target, written, skipped }) => ({ target, written, skipped })), [
+    { target: 'codex-cli', written: true, skipped: undefined },
+    { target: 'claude-code', written: false, skipped: 'injected destination failure' },
+    { target: 'opencode', written: false, skipped: 'not attempted because an earlier destination failed' },
+  ]);
+  assert.equal(existsSync(report.targets[0].destination), true);
+  assert.equal(existsSync(report.targets[1].destination), false);
+  assert.equal(existsSync(report.targets[2].destination), false);
+
+  for (const formatted of [renderConvert(report), renderConvertMarkdown(report)]) {
+    assert.match(formatted, /\(written\)/);
+    assert.match(formatted, /injected destination failure/);
+    assert.match(formatted, /not attempted because an earlier destination failed/);
+  }
+});

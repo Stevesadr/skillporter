@@ -204,8 +204,9 @@ Every conversion classifies each field and feature as one of:
 | `degraded` | Still there, but the target will not act on it, or its behaviour is unknown | yes |
 | `dropped` | Cannot be represented; the target has no equivalent | yes |
 
-Exit codes: `0` clean, `1` error, `2` converted with degradations (make it fatal with
-`--strict`).
+Exit codes: `0` clean, `1` error, `2` converted with losses. `--strict` rejects
+planned losses or staged lint errors before changing any destination. Omitted
+bundled files appear by path with their reason in the fidelity report.
 
 The report is validated against [`schema/conversion-report.schema.json`](schema/conversion-report.schema.json),
 so `--report json` is stable enough to feed another tool.
@@ -270,7 +271,10 @@ Notes that follow from the pipeline:
 - **Nothing is ever executed.** A skill whose script would `touch` a file is converted without
   running it; a test asserts this.
 - **Replacing is never silent.** An existing skill is an error unless `--force` is passed, and
-  the previous copy is moved to a timestamped `.skillporter-backups/` folder first.
+  the replacement is staged in full before the previous copy is moved aside.
+  An install keeps the previous copy in a timestamped `.skillporter-backups/` folder.
+  Every destination is checked before writing. If a write fails, the report
+  shows which destinations were written and why each remaining write stopped.
 - **Four agents share `.agents/skills`.** Byte-identical outputs are written once. Outputs that
   differ collapse to a least-common-denominator copy, and the loss is reported. Claude Code
   always gets a real copy under `.claude/skills`, never a symlink.

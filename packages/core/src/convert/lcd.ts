@@ -1,10 +1,8 @@
-import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
 import type { SkillIR } from '../ir.js';
 import type { AgentProfile } from '../profile.js';
 import { applyShellPolicy, type ShellPolicy } from './body.js';
 import { isFrontmatterKey, planFields, targetKeyFor, triggeredExtensions } from './frontmatter.js';
-import { planIdentity, type PlannedFile, type PlannedSkill } from './plan.js';
+import { planBundledFiles, planIdentity, type PlannedFile, type PlannedSkill } from './plan.js';
 import { summarise, type ConversionItem, type Fidelity } from './report.js';
 
 export interface SharedPlanOptions {
@@ -192,29 +190,7 @@ export async function planSharedConversion(options: SharedPlanOptions): Promise<
     },
   ];
 
-  for (const bundled of ir.files) {
-    const bytes = await readFile(join(ir.origin.root, bundled.path));
-    const executable = (bundled.mode & 0o111) !== 0;
-    const canCarryMode = process.platform !== 'win32';
-    const fidelity: Fidelity = executable && !canCarryMode ? 'degraded' : 'preserved';
-    files.push({
-      path: bundled.path,
-      bytes,
-      mode: bundled.mode,
-      fidelity,
-      reason: fidelity === 'degraded' ? 'copied byte-for-byte, but this platform cannot carry the executable bit' : 'copied byte-for-byte',
-    });
-    items.push({
-      subject: `file:${bundled.path}`,
-      kind: 'file',
-      fidelity,
-      reason:
-        fidelity === 'degraded'
-          ? 'copied byte-for-byte; the executable bit cannot be represented on this platform'
-          : `copied byte-for-byte${executable ? ' with the executable bit' : ''}`,
-      ...(sourceUrl === undefined ? {} : { source: sourceUrl }),
-    });
-  }
+  await planBundledFiles(ir, files, items);
 
   return {
     target: first,

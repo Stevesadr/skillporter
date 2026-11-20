@@ -1,5 +1,7 @@
-import { readFile } from 'node:fs/promises';
+import { readFile, realpath } from 'node:fs/promises';
 import { join } from 'node:path';
+import { isInside } from '../paths.js';
+import { sha256 } from '../files.js';
 import type { SkillIR } from '../ir.js';
 import type { AgentProfile } from '../profile.js';
 import { planBody, type ShellPolicy } from './body.js';
@@ -256,11 +258,67 @@ export async function planConversion(options: PlanOptions): Promise<PlannedSkill
     reason: 'frontmatter rebuilt from the IR, body appended unchanged',
   };
 
-  // ---- bundled files -------------------------------------------------------
   const files: PlannedFile[] = [skillFile];
+  await planBundledFiles(ir, files, items, sourceUrl);
+
+  if (!items.some((item) => item.kind === 'file') && ir.origin.layout === 'directory') {
+    items.push({
+      subject: 'file:*',
+      kind: 'file',
+      fidelity: 'preserved',
+      reason: 'the skill bundles no files of its own',
+      ...(sourceUrl === undefined ? {} : { source: sourceUrl }),
+    });
+  }
+
+  return {
+    target,
+    identity: directory.name,
+    directoryName: directory.name,
+    layout: 'directory',
+    files,
+    items,
+    summary: summarise(items),
+    renamed: namePlan.name !== ir.identity.name,
+  };
+}
+
+
+export async function planBundledFiles(
+  ir: SkillIR,
+  files: PlannedFile[],
+  items: ConversionItem[],
+  sourceUrl?: string,
+): Promise<void> {
+  for (const diagnostic of ir.diagnostics) {
+    if (!['LIMIT_EXCEEDED', 'FILE_SKIPPED', 'SYMLINK_BROKEN', 'SYMLINK_OUTSIDE_ROOT'].includes(diagnostic.code)) continue;
+    const path = diagnostic.file ?? diagnostic.detail?.path;
+    if (typeof path !== 'string') continue;
+    items.push({
+      subject: `file:${path}`,
+      kind: 'file',
+      fidelity: 'dropped',
+      reason: diagnostic.message,
+    });
+  }
+
+  const root = await realpath(ir.origin.root);
   for (const bundled of ir.files) {
-    const absolute = join(ir.origin.root, bundled.path);
-    const bytes = await readFile(absolute);
+    let bytes: Buffer;
+    try {
+      const absolute = await realpath(join(root, bundled.path));
+      if (!isInside(root, absolute)) throw new Error('the path resolves outside the skill root');
+      bytes = await readFile(absolute);
+      if (sha256(bytes) !== bundled.sha256) throw new Error('the file changed after the source was scanned');
+    } catch (error) {
+      items.push({
+        subject: `file:${bundled.path}`,
+        kind: 'file',
+        fidelity: 'dropped',
+        reason: error instanceof Error ? error.message : String(error),
+      });
+      continue;
+    }
     const executable = (bundled.mode & 0o111) !== 0;
     const canCarryMode = process.platform !== 'win32';
     const fidelity: Fidelity = executable && !canCarryMode ? 'degraded' : 'preserved';
@@ -286,24 +344,4 @@ export async function planConversion(options: PlanOptions): Promise<PlannedSkill
     });
   }
 
-  if (ir.files.length === 0 && ir.origin.layout === 'directory') {
-    items.push({
-      subject: 'file:*',
-      kind: 'file',
-      fidelity: 'preserved',
-      reason: 'the skill bundles no files of its own',
-      ...(sourceUrl === undefined ? {} : { source: sourceUrl }),
-    });
-  }
-
-  return {
-    target,
-    identity: directory.name,
-    directoryName: directory.name,
-    layout: 'directory',
-    files,
-    items,
-    summary: summarise(items),
-    renamed: namePlan.name !== ir.identity.name,
-  };
 }

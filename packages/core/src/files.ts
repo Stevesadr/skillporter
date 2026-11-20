@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { lstat, readdir, readFile, realpath, stat } from 'node:fs/promises';
+import { readdir, readFile, realpath, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Diagnostic } from './diagnostics.js';
 import type { ToolLimits } from './limits.js';
@@ -58,10 +58,29 @@ export async function collectBundledFiles(
 
   const rootReal = await realpath(root);
   let totalBytes = 0;
-  let stopped = false;
+  let stopped: 'maxFiles' | 'maxTotalBytes' | undefined;
+
+  function reportLimit(path: string, limit: 'maxFiles' | 'maxTotalBytes'): void {
+    diagnostics.push({
+      code: 'LIMIT_EXCEEDED',
+      severity: 'warning',
+      message: `skipped "${path}" because the tool limit of ${limits[limit]} ${limit === 'maxFiles' ? 'files' : 'total bytes'} was reached; the file was not read`,
+      hint: `This is a skillporter limit. Raise it with ${limit === 'maxFiles' ? '--max-files' : '--max-total-bytes'}.`,
+      file: path,
+      detail: { scope: 'tool', limit, value: limits[limit], path },
+    });
+  }
+
+  function reportUnreadable(path: string, error: unknown): void {
+    diagnostics.push({
+      code: 'FILE_SKIPPED',
+      severity: 'warning',
+      message: `could not read "${path}": ${error instanceof Error ? error.message : String(error)}`,
+      file: path,
+    });
+  }
 
   async function walk(directory: string, depth: number, prefix: string): Promise<void> {
-    if (stopped) return;
 
     if (depth > limits.maxDepth) {
       diagnostics.push({
@@ -74,12 +93,17 @@ export async function collectBundledFiles(
       return;
     }
 
-    const entries = await readdir(directory, { withFileTypes: true });
+    let entries;
+    try {
+      entries = await readdir(directory, { withFileTypes: true });
+    } catch (error) {
+      if (prefix === '') throw error;
+      reportUnreadable(toPosix(prefix), error);
+      return;
+    }
     entries.sort((left, right) => left.name.localeCompare(right.name));
 
     for (const entry of entries) {
-      if (stopped) return;
-
       const absolute = join(directory, entry.name);
       const relative = prefix === '' ? entry.name : `${prefix}/${entry.name}`;
       const posix = toPosix(relative);
@@ -122,26 +146,34 @@ export async function collectBundledFiles(
         kind = 'file';
       }
 
-      if (kind === 'other') continue;
+      if (kind === 'other') {
+        diagnostics.push({
+          code: 'FILE_SKIPPED',
+          severity: 'warning',
+          message: `skipped "${posix}" because it is not a regular file or directory`,
+          file: posix,
+        });
+        continue;
+      }
 
       if (kind === 'directory') {
         await walk(target, depth + 1, relative);
         continue;
       }
 
-      if (files.length >= limits.maxFiles) {
-        diagnostics.push({
-          code: 'LIMIT_EXCEEDED',
-          severity: 'warning',
-          message: `stopped after ${limits.maxFiles} files; the rest were not read`,
-          hint: 'This is a skillporter limit. Raise it with --max-files.',
-          detail: { scope: 'tool', limit: 'maxFiles', value: limits.maxFiles, path: posix },
-        });
-        stopped = true;
-        return;
+      if (files.length >= limits.maxFiles) stopped ??= 'maxFiles';
+      if (stopped !== undefined) {
+        reportLimit(posix, stopped);
+        continue;
       }
 
-      const info = await stat(target);
+      let info;
+      try {
+        info = await stat(target);
+      } catch (error) {
+        reportUnreadable(posix, error);
+        continue;
+      }
       if (info.size > limits.maxFileBytes) {
         diagnostics.push({
           code: 'LIMIT_EXCEEDED',
@@ -155,18 +187,18 @@ export async function collectBundledFiles(
       }
 
       if (totalBytes + info.size > limits.maxTotalBytes) {
-        diagnostics.push({
-          code: 'LIMIT_EXCEEDED',
-          severity: 'warning',
-          message: `stopped because bundled files exceed the tool limit of ${limits.maxTotalBytes} bytes`,
-          hint: 'This is a skillporter limit. Raise it with --max-total-bytes.',
-          detail: { scope: 'tool', limit: 'maxTotalBytes', value: limits.maxTotalBytes, path: posix },
-        });
-        stopped = true;
-        return;
+        stopped = 'maxTotalBytes';
+        reportLimit(posix, stopped);
+        continue;
       }
 
-      const buffer = await readFile(target);
+      let buffer: Buffer;
+      try {
+        buffer = await readFile(target);
+      } catch (error) {
+        reportUnreadable(posix, error);
+        continue;
+      }
       totalBytes += buffer.byteLength;
       const { encoding, lineEnding } = classify(buffer);
 

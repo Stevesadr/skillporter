@@ -19,6 +19,7 @@ function sourceLine(report: ConversionReport): string {
 
 function modeLine(report: ConversionReport): string {
   const where = report.mode === 'install' ? 'installed into the target roots' : 'written under --out';
+  if (report.targets.some((target) => target.skipped !== undefined)) return 'conversion stopped before all destinations were written';
   return report.dryRun ? `dry run: nothing written (would be ${where})` : where;
 }
 
@@ -48,11 +49,13 @@ export function renderConvert(report: ConversionReport): string {
   const width = Math.max(...rows.map(([label]) => label.length));
   for (const [label, value] of rows) lines.push(`  ${pad(label, width)}  ${value}`);
 
+  const stopped = report.targets.some((target) => target.skipped !== undefined);
   for (const target of report.targets) {
     lines.push('');
-    const state = target.written ? '' : report.dryRun ? '  (not written)' : '  (skipped)';
+    const state = target.written ? (stopped ? '  (written)' : '') : '  (not written)';
     lines.push(`  ${target.displayName} (${target.target})${state}`);
     lines.push(`    → ${target.destination}`);
+    if (target.skipped !== undefined) lines.push(`    ${target.skipped}`);
     lines.push(`    ${tally(target.summary)}`);
 
     if (target.items.length > 0) {
@@ -128,6 +131,7 @@ export function renderConvert(report: ConversionReport): string {
  * success next to an error in the lint block.
  */
 function verdictFor(report: ConversionReport): string {
+  if (report.targets.some((target) => target.skipped !== undefined)) return 'conversion stopped';
   const broken = report.targets.filter((target) => (target.lint?.summary.errors ?? 0) > 0);
   if (broken.length > 0) {
     return `converted, but the output will not load as written for ${broken.map((target) => target.target).join(', ')}`;
@@ -152,7 +156,8 @@ export function renderConvertMarkdown(report: ConversionReport): string {
   for (const target of report.targets) {
     lines.push(`## ${target.displayName} (\`${target.target}\`)`);
     lines.push('');
-    lines.push(`Destination: \`${target.destination}\`${target.written ? '' : ' (not written)'}`);
+    if (target.skipped !== undefined) lines.push(`Write stopped: ${target.skipped}`);
+    lines.push(`Destination: \`${target.destination}\`${target.written ? ' (written)' : ' (not written)'}`);
     lines.push('');
     lines.push(`| Preserved | Adapted | Renamed | Degraded | Dropped |`);
     lines.push(`| --- | --- | --- | --- | --- |`);

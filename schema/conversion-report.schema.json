@@ -115,7 +115,7 @@
           "suffix": { "type": "string" },
           "scope": { "enum": ["project", "global"] },
           "targets": { "type": "array", "items": { "type": "string" } },
-          "action": { "enum": ["write", "shared", "overlap-skipped", "dry-run"] },
+          "action": { "enum": ["write", "shared", "overlap-skipped", "dry-run", "skipped"] },
           "backup": { "type": "string" },
           "note": { "type": "string" }
         }

@@ -86,7 +86,7 @@ export interface RootReport {
   /** Targets served by this single copy. */
   targets: string[];
   /** What happened here. */
-  action: 'write' | 'shared' | 'overlap-skipped' | 'dry-run';
+  action: 'write' | 'shared' | 'overlap-skipped' | 'dry-run' | 'skipped';
   /** Where the previous contents were moved, when something was replaced. */
   backup?: string;
   note?: string;
@@ -119,7 +119,7 @@ export interface TargetReport {
   directoryName: string;
   /** Absolute path of the skill directory that was (or would be) written. */
   destination: string;
-  /** False for --dry-run and for a copy skipped because another root already serves it. */
+  /** Whether the destination received the new copy. */
   written: boolean;
   /** Why nothing was written, when that is not just --dry-run. */
   skipped?: string;
@@ -224,11 +224,11 @@ export function summariseUnique(targets: readonly TargetReport[]): UniqueFidelit
  *
  * 1 when an output would not work on its target (post-conversion lint found an
  * error), 2 when something was degraded or dropped, 0 otherwise. `--strict`
- * turns every loss into an error without changing what was written.
+ * rejects a lossy conversion before writing.
  */
 export function exitCodeForConversion(report: ConversionReport, strict: boolean): 0 | 1 | 2 {
   const broken = report.targets.some((target) => (target.lint?.summary.errors ?? 0) > 0);
-  if (broken) return 1;
+  if (broken || report.targets.some((target) => target.skipped !== undefined)) return 1;
   if (report.summary.degraded + report.summary.dropped > 0) return strict ? 1 : 2;
   return 0;
 }

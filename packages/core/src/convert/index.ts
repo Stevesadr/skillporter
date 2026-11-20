@@ -3,6 +3,7 @@ import { dirname, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { extractZip, isZipPath } from '../archive.js';
 import { lintSkill } from '../lint.js';
+import { isInside } from '../paths.js';
 import { resolveLimits, type ToolLimits } from '../limits.js';
 import { AmbiguousSourceError, parseSkill } from '../parse.js';
 import { findProfile, knownAgentsText, loadProfiles, ProfileError, type AgentProfile } from '../profile.js';
@@ -19,7 +20,7 @@ import {
   type TargetReport,
 } from './report.js';
 import { assignRoots, defaultRootContext, rootsFor, type Scope } from './roots.js';
-import { writeSkill, writeSkillToOutput, type WriteSkillResult } from '../install.js';
+import { prepareSkillWrite, type WriteSkillOptions, type WriteSkillResult } from '../install.js';
 import type { ShellPolicy } from './body.js';
 
 export interface ConvertOptions {
@@ -83,7 +84,7 @@ async function lintOutput(
     for (const file of plan.files) {
       const path = join(skillDir, ...file.path.split('/'));
       await mkdir(dirname(path), { recursive: true });
-      await writeFile(path, file.bytes);
+      await writeFile(path, file.bytes, { flag: 'wx' });
     }
     const result = await lintSkill({ path: skillDir, for: targetId, from: targetId });
     return { findings: result.findings, summary: result.summary };
@@ -223,15 +224,22 @@ export async function convertSkill(options: ConvertOptions): Promise<ConversionR
       : 'unknown';
     const policy: ShellPolicy = options.shellPolicy ?? 'neutralize';
 
-  const context = defaultRootContext(options.projectRoot ?? process.cwd());
-  if (options.home !== undefined) context.home = options.home;
-  const scope: Scope = options.scope ?? 'project';
-  const stagingRoot = options.stagingRoot ?? tmpdir();
+    const context = defaultRootContext(options.projectRoot ?? process.cwd());
+    if (options.home !== undefined) context.home = options.home;
+    const scope: Scope = options.scope ?? 'project';
+    const stagingRoot = options.stagingRoot ?? tmpdir();
 
     const targetReports: TargetReport[] = [];
     const roots: RootReport[] = [];
     const overlaps: OverlapReport[] = [];
     const notes: string[] = [];
+    const writes: { root: RootReport; options: WriteSkillOptions }[] = [];
+    const writeOptions = {
+      strict: options.strict === true,
+      force: options.force === true,
+      ...(options.confirm === undefined ? {} : { confirm: options.confirm }),
+      ...(options.now === undefined ? {} : { now: options.now }),
+    };
 
     const planFor = async (target: AgentProfile): Promise<PlannedSkill> =>
       planConversion({
@@ -287,13 +295,7 @@ export async function convertSkill(options: ConvertOptions): Promise<ConversionR
           if (identical && first !== undefined) {
             for (const plan of individual) plans.set(plan.target.id, plan);
             writtenPlan = first;
-            // Tense matters here: a dry run must not report a write that did
-            // not happen, and the reader is checking exactly that.
-            notes.push(
-              options.dryRun === true
-                ? `${group.map((target) => target.id).join(', ')} produce byte-identical output, so one copy would be written to ${assignment.root.path}`
-                : `${group.map((target) => target.id).join(', ')} produced byte-identical output, so it was written once to ${assignment.root.path}`,
-            );
+            notes.push(`${group.map((target) => target.id).join(', ')} produce byte-identical output, so one copy ${options.dryRun === true ? 'would be written to' : 'is planned for'} ${assignment.root.path}`);
           } else {
             const shared = await planSharedConversion({
               ir,
@@ -305,53 +307,34 @@ export async function convertSkill(options: ConvertOptions): Promise<ConversionR
             });
             for (const target of group) plans.set(target.id, shared);
             writtenPlan = shared;
-            notes.push(
-              options.dryRun === true
-                ? `${group.map((target) => target.id).join(', ')} would share ${assignment.root.path} but produce different files, so a least-common-denominator copy would be written. Pass --strict to make that a failure.`
-                : `${group.map((target) => target.id).join(', ')} share ${assignment.root.path} but would produce different files, so a least-common-denominator copy was written. Pass --strict to make that a failure.`,
-            );
+            notes.push(`${group.map((target) => target.id).join(', ')} share ${assignment.root.path} and produce different files, so the plan uses a least-common-denominator copy. Pass --strict to make a loss a failure.`);
           }
         }
 
         const destination = join(assignment.root.path, writtenPlan.directoryName);
 
-        let written = false;
-        let writeResult: WriteSkillResult | null = null;
-        if (options.dryRun !== true) {
-          writeResult = await writeSkill({
-            root: assignment.root.path,
-            directoryName: writtenPlan.directoryName,
-            files: planFiles(writtenPlan),
-            force: options.force === true,
-            ...(options.confirm === undefined ? {} : { confirm: options.confirm }),
-            ...(options.now === undefined ? {} : { now: options.now }),
-          });
-          written = true;
-        }
-
-        roots.push({
+        const root: RootReport = {
           path: assignment.root.path,
           suffix: assignment.root.suffix,
           scope,
           targets: assignment.targets,
           action: options.dryRun === true ? 'dry-run' : group.length > 1 ? 'shared' : 'write',
-          ...(writeResult?.backup === undefined ? {} : { backup: writeResult.backup }),
-          ...(group.length > 1
-            ? { note: 'one real copy serves every target listed; no symlinks are created' }
-            : {}),
+          ...(group.length > 1 ? { note: 'one real copy serves every target listed; no symlinks are created' } : {}),
+        };
+        roots.push(root);
+        writes.push({
+          root,
+          options: {
+            ...writeOptions,
+            root: root.path,
+            directoryName: writtenPlan.directoryName,
+            files: planFiles(writtenPlan),
+          },
         });
 
         for (const target of group) {
           const plan = plans.get(target.id) ?? writtenPlan;
-          const staged = await lintOutput(plan, target.id, stagingRoot);
-
-          // Only a real install has a destination to check. --dry-run must not
-          // read a directory that does not exist, and must not pretend it did.
-          const installed: { lint: NonNullable<TargetReport['lint']> | null; note?: string } =
-            options.dryRun === true ? { lint: null } : await lintInstalled(destination, target.id);
-          if (installed.note !== undefined) notes.push(installed.note);
-
-          const lint = mergeLint(staged, installed.lint);
+          const lint = await lintOutput(plan, target.id, stagingRoot);
           const items: ConversionItem[] =
             group.length === 1
               ? plan.items
@@ -366,7 +349,7 @@ export async function convertSkill(options: ConvertOptions): Promise<ConversionR
             layout: plan.layout,
             directoryName: plan.directoryName,
             destination,
-            written,
+            written: false,
             items,
             files: plan.files.map((file) => ({
               path: file.path,
@@ -409,24 +392,17 @@ export async function convertSkill(options: ConvertOptions): Promise<ConversionR
         const outDir = multi ? join(outRoot, target.id) : outRoot;
         const destination = join(outDir, plan.directoryName);
 
-        let written = false;
-        let writeResult: WriteSkillResult | null = null;
-        if (options.dryRun !== true) {
-          writeResult = await writeSkillToOutput(outDir, plan.directoryName, planFiles(plan), {
-            force: options.force === true,
-            ...(options.confirm === undefined ? {} : { confirm: options.confirm }),
-            ...(options.now === undefined ? {} : { now: options.now }),
-          });
-          written = true;
-        }
-
-        roots.push({
+        const root: RootReport = {
           path: outDir,
           suffix: outDir.split(/[/\\]/).slice(-2).join('/'),
           scope,
           targets: [target.id],
           action: options.dryRun === true ? 'dry-run' : 'write',
-          ...(writeResult?.backup === undefined ? {} : { backup: writeResult.backup }),
+        };
+        roots.push(root);
+        writes.push({
+          root,
+          options: { ...writeOptions, root: outDir, directoryName: plan.directoryName, files: planFiles(plan), backup: false },
         });
 
         targetReports.push({
@@ -436,7 +412,7 @@ export async function convertSkill(options: ConvertOptions): Promise<ConversionR
           layout: plan.layout,
           directoryName: plan.directoryName,
           destination,
-          written,
+          written: false,
           items: plan.items,
           files: plan.files.map((file) => ({
             path: file.path,
@@ -460,23 +436,73 @@ export async function convertSkill(options: ConvertOptions): Promise<ConversionR
       }
     }
 
+    if (options.dryRun !== true) {
+      const strictFailure = options.strict === true && targetReports.some(
+        (target) => target.summary.degraded + target.summary.dropped > 0 || (target.lint?.summary.errors ?? 0) > 0,
+      );
+      if (strictFailure) {
+        for (const root of roots) root.action = 'skipped';
+        for (const target of targetReports) target.skipped = '--strict rejected the conversion during preflight';
+      } else {
+        const ready: (Awaited<ReturnType<typeof prepareSkillWrite>> & { root: RootReport })[] = [];
+        for (const write of writes) {
+          const prepared = await prepareSkillWrite(write.options);
+          const conflict = ready.find(({ destination }) =>
+            isInside(destination, prepared.destination) || isInside(prepared.destination, destination),
+          );
+          if (conflict !== undefined) {
+            throw new ConversionError(`output destinations overlap at ${conflict.destination} and ${prepared.destination}`);
+          }
+          ready.push({ root: write.root, ...prepared });
+        }
+
+        let previousFailure = false;
+        for (const { root, commit } of ready) {
+          const reports = targetReports.filter((target) => root.targets.includes(target.target));
+          let result: WriteSkillResult;
+          try {
+            if (previousFailure) throw new ConversionError('not attempted because an earlier destination failed');
+            result = await commit();
+          } catch (error) {
+            root.action = 'skipped';
+            root.note = error instanceof Error ? error.message : String(error);
+            for (const target of reports) target.skipped = root.note;
+            previousFailure = true;
+            continue;
+          }
+          if (result.backup !== undefined) root.backup = result.backup;
+          if (result.modeFailures.length > 0) {
+            notes.push(`could not apply file permissions at ${result.destination}: ${result.modeFailures.join(', ')}`);
+          }
+          for (const target of reports) {
+            target.written = true;
+            if (options.install === true && target.lint !== null) {
+              const installed = await lintInstalled(target.destination, target.target);
+              if (installed.note !== undefined) notes.push(installed.note);
+              target.lint = mergeLint(target.lint, installed.lint);
+            }
+          }
+        }
+      }
+    }
+
     if (options.dryRun === true) {
       notes.push('--dry-run: nothing was written. The report describes what would be.');
     }
     for (const target of targets) {
       if ((target.delivery ?? 'directory') === 'archive') {
         notes.push(
-          `${target.id} takes an uploaded bundle rather than a directory it scans: the folder written here is what you zip and upload, and there is no install step.`,
+          `${target.id} takes an uploaded bundle rather than a directory it scans: the output folder is what you zip and upload, and there is no install step.`,
         );
       }
     }
-    if (options.install === true && options.dryRun !== true) {
+    if (options.install === true && targetReports.some((target) => target.written)) {
       notes.push(
-        'post-conversion lint ran on a staged copy and again at the installed destination, so rules that depend on where the skill sits (depth, duplicate names, a symlinked root) are included',
+        'post-conversion lint ran on a staged copy and again at each installed destination, so rules that depend on where the skill sits (depth, duplicate names, a symlinked root) are included',
       );
     } else if (options.install === true) {
       notes.push(
-        'post-conversion lint ran on a staged copy only: --dry-run installs nothing, so rules that depend on the destination location could not be checked',
+        'post-conversion lint ran on a staged copy only; rules that depend on the installed location could not be checked',
       );
     } else {
       notes.push(

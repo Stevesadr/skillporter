@@ -52,7 +52,10 @@ report-builder  ·  ./my-skill
 
 `inspect` reads; it never writes and never executes. `lint --for <agent>` reports what that
 target would do with the skill, from a 25-rule catalogue. `convert` writes to a new directory
-or installs into a discovered root, atomically, and refuses to overwrite without `--force`.
+or installs into a discovered root. Each replacement is staged before the
+previous copy is moved aside. `--strict` rejects planned losses or staged lint
+errors before changing any destination. If a write fails after preflight, the
+report shows the outcome for each destination.
 
 ## Safety
 
@@ -70,7 +73,7 @@ or installs into a discovered root, atomically, and refuses to overwrite without
 | --- | --- | --- | --- |
 | `inspect` | no errors | at least one error | — |
 | `lint` | clean, or informational only | at least one error | warnings only |
-| `convert` | converted with nothing lost | an output would not work on its target, or `--strict` was passed and anything was lost | something was degraded or dropped |
+| `convert` | converted with nothing lost | a destination write failed, an output failed lint, or `--strict` rejected a planned loss | something was degraded or dropped |
 
 ## Links
 
