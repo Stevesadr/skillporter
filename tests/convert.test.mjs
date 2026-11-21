@@ -1088,6 +1088,8 @@ test('cli: --report json emits a report that parses and matches the schema', asy
   const result = await run(['convert', REPORT_BUILDER, '--from', 'claude-code', '--to', 'codex-cli', '--out', out, '--report', 'json']);
   const report = JSON.parse(result.stdout);
   assert.equal(report.tool.name, 'skillporter');
+  const manifest = JSON.parse(await readFile(join(ROOT, 'packages', 'core', 'package.json'), 'utf8'));
+  assert.equal(report.tool.version, manifest.version);
   assert.equal(report.mode, 'out');
   assert.equal(report.dryRun, false);
   assert.ok(Array.isArray(report.targets[0].items));

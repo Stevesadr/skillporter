@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { mkdtemp, rm, writeFile, mkdir } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -54,7 +55,9 @@ export interface ConvertOptions {
   confirm?: (destination: string) => Promise<boolean>;
 }
 
-const TOOL = { name: 'skillporter', version: '0.0.0' } as const;
+// The manifest is two levels above dist/convert in both build layouts.
+const manifest = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8')) as { version: string };
+const TOOL = { name: 'skillporter', version: manifest.version } as const;
 
 function planFiles(plan: PlannedSkill) {
   return plan.files.map((file) => ({ path: file.path, bytes: file.bytes, mode: file.mode }));
