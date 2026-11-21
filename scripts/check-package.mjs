@@ -11,7 +11,7 @@
  * Run with `npm run check:package`. Exits 1 on the first failed expectation.
  */
 import { spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -128,12 +128,18 @@ try {
   ok(`lint ran and exited ${lint.status} (a documented code)`);
 
   const out = join(app, 'out');
-  const convert = run(['convert', skill, '--from', 'claude-code', '--to', 'codex-cli,claude-ai-upload', '--out', out]);
+  const convert = run(['convert', skill, '--from', 'claude-code', '--to', 'codex-cli,claude-ai-upload', '--out', out, '--report', 'json']);
   if (convert.status !== 0) fail(`convert exited ${convert.status}\n${convert.stderr}`);
   for (const expected of [join(out, 'codex-cli', 'changelog-writer', 'SKILL.md'), join(out, 'claude-ai-upload', 'changelog-writer', 'SKILL.md')]) {
     if (!existsSync(expected)) fail(`convert did not write ${expected}`);
   }
   ok('convert wrote both targets from the installed package');
+  const report = JSON.parse(convert.stdout);
+  const coreManifest = JSON.parse(readFileSync(join(app, 'node_modules', '@skillporter', 'core', 'package.json'), 'utf8'));
+  if (report.tool?.version !== coreManifest.version) {
+    fail(`conversion report tool.version is ${report.tool?.version}, expected ${coreManifest.version}`);
+  }
+  ok(`conversion report matches the installed core version (${coreManifest.version})`);
 
   // ---- a usage error is a usage error, not a crash -------------------------
   const unknown = run(['lint', skill, '--for', 'not-an-agent']);
